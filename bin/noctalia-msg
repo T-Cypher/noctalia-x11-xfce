@@ -1,0 +1,32 @@
+#!/bin/sh
+# noctalia-msg - send noctalia IPC commands to the Quickshell X11 port.
+#
+#   noctalia-msg panel-toggle launcher
+#   noctalia-msg panel-toggle control-center audio
+#   noctalia-msg volume-up 5
+#   noctalia-msg msg session lock        # "msg" prefix accepted for copy-pasted noctalia binds
+#   noctalia-msg --help                  # list commands
+#
+# NOCTALIA_X11_QS_CONFIG selects the Quickshell config: a name under ~/.config/quickshell
+# (default: noctalia-x11) or an absolute path to the config directory.
+
+CONFIG="${NOCTALIA_X11_QS_CONFIG:-noctalia-x11}"
+
+if command -v qs >/dev/null 2>&1; then
+    QS=qs
+elif command -v quickshell >/dev/null 2>&1; then
+    QS=quickshell
+else
+    echo "noctalia-msg: quickshell (qs) not found in PATH" >&2
+    exit 127
+fi
+
+[ "$1" = "msg" ] && shift
+if [ $# -eq 0 ] || [ "$1" = "--help" ] || [ "$1" = "-h" ] || [ "$1" = "help" ]; then
+    set -- help
+fi
+
+case "$CONFIG" in
+    /*) exec "$QS" -p "$CONFIG" ipc call noctalia msg "$*" ;;
+    *)  exec "$QS" -c "$CONFIG" ipc call noctalia msg "$*" ;;
+esac

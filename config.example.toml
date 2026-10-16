@@ -1,0 +1,299 @@
+# Noctalia X11 - configuration
+#
+# Location: ~/.config/noctalia-x11/config.toml   (hot-reloaded on save)
+# Fallback: ~/.config/noctalia/config.toml       (a native noctalia v5 config is read as-is)
+#
+# The schema is noctalia v5.3.0's (same tables and keys as its example.toml). Keys this port
+# does not implement are ignored. X11 / XFCE specific settings live in [x11] at the bottom.
+
+# ── Shell ─────────────────────────────────────────────────────────────────────
+
+[accessibility]
+ui_scale = 1.0
+
+[shell]
+font_family         = "sans-serif"
+time_format         = "{:%H:%M}"        # std::format chrono syntax, or plain strftime ("%H:%M")
+date_format         = "%A, %x"
+corner_radius_scale = 1.0
+avatar_path         = ""                # empty = ~/.face or AccountsService icon
+clipboard_enabled   = true
+clipboard_history_max_entries = 100
+clipboard_auto_paste = "auto"           # auto | off  (pasting uses xdotool)
+offline_mode        = false             # disables weather / geolocation requests
+# lang = "de"                           # default: $LANG; uses noctalia's translations
+
+[shell.animation]
+enabled = true
+speed   = 1.0
+
+[shell.shadow]
+direction = "down"
+alpha     = 0.55
+
+[shell.panel]
+transparency_mode        = "solid"      # solid | translucent
+borders                  = true
+border_color             = "outline"
+border_width             = 1.0
+launcher_placement       = "floating"   # floating | attached
+launcher_position        = "center"     # center | top | bottom | top_left | ...
+clipboard_placement      = "floating"
+control_center_placement = "attached"
+wallpaper_placement      = "attached"
+session_placement        = "attached"
+open_near_click_control_center = false
+
+[shell.launcher]
+layout              = "full"            # full | simple
+width               = 760
+search_position     = "top"             # top | bottom
+default_view        = "recent"          # recent | pinned | all | categories
+categories          = true
+show_settings_button = true
+show_session_button = true
+app_grid            = false
+track_usage         = true
+sort_by_usage       = true
+pinned              = []                # desktop entry ids, e.g. ["firefox", "org.xfce.mousepad"]
+provider_prefix     = "/"
+
+[shell.launcher.providers.calculator]
+prefix = "calc"
+global = true
+
+[shell.mpris]
+blacklist = []                          # e.g. ["chromium"]
+
+# [shell.session]
+# grid = false
+# [[shell.session.actions]]
+# action = "lock"
+# [[shell.session.actions]]
+# action = "shutdown"
+# countdown_seconds = 3
+# [[shell.session.actions]]
+# action = "command"
+# label = "Firmware setup"
+# glyph = "settings"
+# command = "systemctl reboot --firmware-setup"
+
+# ── Wallpaper ─────────────────────────────────────────────────────────────────
+# Applied through xfdesktop (xfconf) on XFCE, so desktop icons keep working.
+
+[wallpaper]
+fill_mode = "crop"                      # crop | fit | stretch | center | tile
+directory = ""                          # empty = XDG Pictures directory
+# directory_dark  = "~/Pictures/dark"
+# directory_light = "~/Pictures/light"
+
+[wallpaper.automation]
+enabled          = false
+interval_seconds = 1800
+order            = "random"             # random | alphabetical
+recursive        = true
+
+# ── Theme ─────────────────────────────────────────────────────────────────────
+
+[theme]
+mode    = "dark"                        # dark | light | auto (follows sunrise/sunset)
+source  = "builtin"                     # builtin | wallpaper
+builtin = "Noctalia"                    # Ayu | Catppuccin | Dracula | Eldritch | Gruvbox |
+                                        # Kanagawa | Noctalia | Nord | Rosé Pine | Tokyo-Night
+pure_black_dark = false
+
+# [backdrop]
+# enabled        = true                 # dim the screen behind open panels
+# tint_intensity = 0.3
+
+# ── Notifications ─────────────────────────────────────────────────────────────
+# Replaces xfce4-notifyd (see scripts/xfce-setup.sh --notifications).
+
+[notification]
+enable_daemon      = true
+show_app_name      = true
+show_actions       = true
+keep_dismissed_in_history = true
+background_opacity = 0.97
+border             = true
+border_color       = "outline"
+position           = "top_right"        # top_right | top_left | top_center | bottom_*
+offset_x           = 20
+offset_y           = 8
+default_timeout_ms = 5000
+# monitors         = ["HDMI-1"]         # xrandr output names; empty = all monitors
+
+# [notification.filter.spotify]
+# match        = "spotify"
+# show_toast   = false
+# save_history = false
+
+# ── OSD ───────────────────────────────────────────────────────────────────────
+
+[osd]
+enabled       = true
+position      = "top_center"               # top_center | top_right | top_left | bottom_* | center_left | center_right
+hide_delay_ms = 1400
+
+[osd.kinds]
+volume = true
+brightness = true
+keyboard_layout = true
+lock_keys = true
+
+# ── Services ──────────────────────────────────────────────────────────────────
+
+[system.monitor]
+enabled = true
+cpu_poll_seconds     = 2.0
+memory_poll_seconds  = 2.0
+network_poll_seconds = 3.0
+disk_poll_seconds    = 10.0
+
+[control_center]
+sidebar = "compact"                     # full | compact | none
+width   = 700
+show_shortcut_labels = true
+show_session_button  = true
+hidden_tabs = []                        # e.g. ["monitor", "weather"]
+
+# Up to 6 Home shortcuts: wifi | bluetooth | caffeine | nightlight | notification |
+# power_profile | wallpaper | session | theme_mode | screenshot | clipboard
+# [[control_center.shortcuts]]
+# type = "wifi"
+
+[weather]
+enabled         = false
+refresh_minutes = 30
+unit            = "celsius"             # celsius | fahrenheit
+
+[location]
+auto_locate = false
+address     = ""                        # e.g. "Lisbon, PT"
+# latitude  = 38.72
+# longitude = -9.14
+# custom_schedule = true
+# sunset  = "20:30"
+# sunrise = "07:30"
+
+[audio]
+enable_overdrive = false                # allow up to 150%
+volume_step      = 5
+
+[brightness]
+minimum_brightness = 0.0
+step = 5
+
+[nightlight]
+enabled = false                         # redshift / gammastep / sct / xrandr backend
+force   = false
+temperature_day   = 6500
+temperature_night = 4000
+
+# Idle behaviors use the X11 screensaver idle time (XScreenSaver extension).
+[idle.behavior.lock]
+timeout = 600
+action  = "lock"                        # lock | screen_off | suspend | lock_and_suspend | command
+enabled = false
+
+[idle.behavior.screen-off]
+timeout = 660
+action  = "screen_off"
+enabled = false
+
+# ── Bar ───────────────────────────────────────────────────────────────────────
+# Every [bar.<name>] table spawns a bar on each monitor (X11 dock window with struts).
+
+[bar.main]
+position           = "top"              # top | bottom | left | right
+thickness          = 34
+background_opacity = 1.0
+radius             = 12
+margin_ends        = 180
+margin_edge        = 10
+padding            = 14
+widget_spacing     = 6
+scale              = 1.0
+font_scale         = 1.0
+font_weight        = 500
+hover_highlight    = true
+show_tooltip       = true
+auto_hide          = false
+reserve_space      = true
+capsule            = false
+# capsule_fill     = "surface_variant"
+# capsule_border   = "outline"
+
+start  = ["launcher", "wallpaper", "workspaces"]
+center = ["clock"]
+end    = ["media", "tray", "notifications", "clipboard", "network", "bluetooth", "volume", "brightness", "battery", "control-center", "session"]
+
+# Other widgets: taskbar, active_window, sysmon, keyboard_layout, lock_keys, caffeine,
+# nightlight, power_profile, theme_mode, weather, screenshot, settings, spacer, text,
+# custom_button.
+
+# [bar.main.monitor.laptop]
+# match     = "eDP-1"
+# thickness = 30
+
+# [bar.main.dead_zone.actions]
+# middle = "exec xfce4-terminal"
+
+# ── Widgets ───────────────────────────────────────────────────────────────────
+
+# [widget.clock]
+# format = "{:%H:%M}"
+# tooltip_format = "{:%A, %B %d, %Y}"
+
+# [widget.workspaces]
+# style = "regular"                     # regular | minimal | focus_hint
+# labels_only_when_occupied = true
+
+# [widget.sysmon]
+# stat = "cpu_usage"                    # cpu_usage | cpu_temp | ram_pct | ram_used | swap_pct |
+#                                       # disk_used_pct | disk_free | net_rx | net_tx
+# visualization = "gauge"               # gauge | graph | none
+
+# [widget.terminal]
+# type    = "custom_button"
+# glyph   = "terminal"
+# tooltip = "Terminal"
+# command = "exo-open --launch TerminalEmulator"
+
+# [widget.media.actions]
+# right = "media toggle"
+# scroll_up = "volume-up"
+
+# ── Dock ──────────────────────────────────────────────────────────────────────
+
+[dock]
+enabled   = false
+position  = "bottom"
+icon_size = 48
+magnification = true
+magnification_scale = 1.45
+auto_hide = false
+pinned    = []                          # e.g. ["firefox", "org.xfce.Thunar", "xfce4-terminal"]
+
+# ── Hooks ─────────────────────────────────────────────────────────────────────
+
+[hooks]
+# started           = "notify-send 'Noctalia' 'Shell started'"
+# wallpaper_changed = "echo $NOCTALIA_WALLPAPER > /tmp/wall"
+# theme_mode_changed = "notify-send 'Theme' \"$NOCTALIA_THEME_MODE\""
+
+# ── X11 / XFCE ────────────────────────────────────────────────────────────────
+
+[x11]
+lock_command      = ""                  # empty = xflock4 > light-locker > xscreensaver > i3lock > loginctl
+logout_command    = ""                  # empty = xfce4-session-logout --logout --fast
+wallpaper_backend = "auto"              # auto | xfdesktop | feh | xwallpaper | hsetroot | none
+terminal          = ""                  # for Terminal=true apps; empty = exo-open / x-terminal-emulator
+settings_command  = ""                  # empty = open this file in mousepad / xdg-open
+gtk_theme_dark    = ""                  # e.g. "Adwaita-dark"  (switched with theme mode)
+gtk_theme_light   = ""                  # e.g. "Adwaita"
+icon_theme_dark   = ""
+icon_theme_light  = ""
+screenshot_region_command = ""          # empty = xfce4-screenshooter -r / flameshot gui / maim -s
+screenshot_full_command   = ""
+focus_method      = "bridge"            # bridge | qt  (how panels grab keyboard focus)

@@ -1,0 +1,9 @@
+[Desktop Entry]
+Type=Application
+Name=Noctalia (X11)
+Comment=Noctalia shell for XFCE / X11, running on Quickshell
+Exec=sh -c 'sleep 2; exec qs -c noctalia-x11'
+Icon=preferences-desktop-theme
+Terminal=false
+X-GNOME-Autostart-enabled=true
+X-XFCE-Autostart-enabled=true
