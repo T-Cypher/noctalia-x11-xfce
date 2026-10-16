@@ -37,7 +37,7 @@ ShellRoot {
             required property var modelData
 
             Variants {
-                model: Config.barNames
+                model: Config.ready ? Config.barNames : []
                 delegate: Bar {
                     screenRef: screenScope.modelData
                 }
@@ -52,6 +52,10 @@ ShellRoot {
             }
 
             OsdWindow {
+                screenRef: screenScope.modelData
+            }
+
+            IdleFade {
                 screenRef: screenScope.modelData
             }
 

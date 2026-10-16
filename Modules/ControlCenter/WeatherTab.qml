@@ -13,7 +13,7 @@ Item {
     NText {
         anchors.centerIn: parent
         visible: root.cur === null
-        text: Weather.error !== "" ? Weather.error : (Weather.hasLocation ? I18n.tr("weather.loading", "Loading weather…") : "Set [location] address, coordinates or auto_locate")
+        text: Weather.error !== "" ? Weather.error : (Weather.hasLocation ? I18n.tr("desktop-widgets.weather.loading", "Loading…") : "Set [location] address, coordinates or auto_locate")
         muted: true
     }
 

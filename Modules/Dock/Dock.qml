@@ -14,14 +14,18 @@ PanelWindow {
     required property var screenRef
     screen: screenRef
 
-    readonly property var cfg: Config.get("dock", {})
+    // [dock] with [dock.monitor.<x>] overrides (first match wins)
+    readonly property var cfg: Config.barForScreen(Config.get("dock", {}), screenRef)
     readonly property string position: ["top", "bottom", "left", "right"].indexOf(String(cfg.position)) >= 0 ? String(cfg.position) : "bottom"
     readonly property bool vertical: position === "left" || position === "right"
     readonly property real iconSize: Number(cfg.icon_size || 48) * Style.uiScale
     readonly property real mainPad: Number(cfg.main_axis_padding !== undefined ? cfg.main_axis_padding : 16) * Style.uiScale
     readonly property real crossPad: Number(cfg.cross_axis_padding !== undefined ? cfg.cross_axis_padding : 8) * Style.uiScale
     readonly property real spacing: Number(cfg.item_spacing !== undefined ? cfg.item_spacing : 6) * Style.uiScale
-    readonly property real marginEdge: Number(cfg.margin_edge !== undefined ? cfg.margin_edge : 8) * Style.uiScale
+    readonly property real marginEdge: Number(cfg.margin_edge !== undefined ? cfg.margin_edge : 0) * Style.uiScale
+    // Flush with the screen edge (margin_edge = 0): noctalia flares the edge corners concavely;
+    // here the edge-side corners are drawn square so the dock meets the edge cleanly.
+    readonly property bool flush: marginEdge === 0 && cfg.concave_edge_corners !== false
     readonly property real magnify: cfg.magnification !== false ? Number(cfg.magnification_scale || 1.45) : 1
     readonly property bool autoHide: cfg.auto_hide === true
     readonly property bool hiddenByIpc: ShellState.get("dock_hidden", false) === true
@@ -97,7 +101,7 @@ PanelWindow {
     aboveWindows: true
     focusable: false
     color: "transparent"
-    visible: !hiddenByIpc && items.length > 0 && (!activeOnly || (X11.activeWindow ? X11.screenOf(X11.activeWindow) === screenRef : screenRef === Quickshell.screens[0]))
+    visible: !hiddenByIpc && cfg.enabled !== false && Config.screenAllowed(cfg.monitors, screenRef) && items.length > 0 && (!activeOnly || (X11.activeWindow ? X11.screenOf(X11.activeWindow) === screenRef : screenRef === Quickshell.screens[0]))
 
     HoverHandler {
         onHoveredChanged: {
@@ -122,10 +126,14 @@ PanelWindow {
         height: dock.vertical ? parent.height : dock.thickness
         x: dock.position === "right" ? parent.width - width : 0
         y: dock.position === "bottom" ? parent.height - height : 0
-        radius: Style.radius(Number(dock.cfg.radius !== undefined ? dock.cfg.radius : 16))
+        readonly property real r: Math.min(Style.radius(Number(dock.cfg.radius !== undefined ? dock.cfg.radius : 16)), Math.min(width, height) / 2)
+        topLeftRadius: dock.flush && (dock.position === "top" || dock.position === "left") ? 0 : r
+        topRightRadius: dock.flush && (dock.position === "top" || dock.position === "right") ? 0 : r
+        bottomLeftRadius: dock.flush && (dock.position === "bottom" || dock.position === "left") ? 0 : r
+        bottomRightRadius: dock.flush && (dock.position === "bottom" || dock.position === "right") ? 0 : r
         color: Theme.alpha(Theme.surface, Number(dock.cfg.background_opacity !== undefined ? dock.cfg.background_opacity : 0.88))
-        border.color: Theme.outline
-        border.width: Style.borderWidth
+        border.color: Theme.resolve(dock.cfg.border || "outline", Theme.outline)
+        border.width: Math.max(0, Number(dock.cfg.border_width !== undefined ? dock.cfg.border_width : 0))
         opacity: dock.revealed ? 1 : 0
         Behavior on opacity {
             NumberAnimation {
@@ -166,12 +174,9 @@ PanelWindow {
                     width: dock.iconSize * cell.s
                     height: width
                     size: width
-                    anchors.horizontalCenter: dock.vertical ? undefined : parent.horizontalCenter
-                    anchors.verticalCenter: dock.vertical ? parent.verticalCenter : undefined
-                    anchors.bottom: dock.position === "bottom" ? parent.bottom : undefined
-                    anchors.top: dock.position === "top" ? parent.top : undefined
-                    anchors.left: dock.position === "left" ? parent.left : undefined
-                    anchors.right: dock.position === "right" ? parent.right : undefined
+                    // grow away from the docked screen edge
+                    x: dock.position === "left" ? 0 : (dock.position === "right" ? parent.width - width : (parent.width - width) / 2)
+                    y: dock.position === "top" ? 0 : (dock.position === "bottom" ? parent.height - height : (parent.height - height) / 2)
                     source: cell.modelData.entry ? Apps.iconFor(cell.modelData.entry) : (cell.running ? Apps.iconForClass(cell.modelData.windows[0].appId, cell.modelData.windows[0].instance) : "")
                     opacity: cell.active ? Number(dock.cfg.active_opacity || 1) : Number(dock.cfg.inactive_opacity || 0.85)
                     Behavior on width {
@@ -182,24 +187,43 @@ PanelWindow {
                     }
                 }
 
-                // running indicator
-                Row {
-                    visible: cell.running
+                // show_dots: up to three window dots on the screen-edge side (primary when active)
+                readonly property real dot: Math.max(4, Math.round(dock.iconSize * 0.09))
+                Grid {
+                    visible: dock.cfg.show_dots === true && cell.running
+                    rows: dock.vertical ? -1 : 1
+                    columns: dock.vertical ? 1 : -1
                     spacing: 3
-                    anchors.horizontalCenter: dock.vertical ? undefined : parent.horizontalCenter
-                    anchors.verticalCenter: dock.vertical ? parent.verticalCenter : undefined
-                    anchors.bottom: dock.position === "bottom" ? parent.bottom : undefined
-                    anchors.bottomMargin: -dock.crossPad * 0.7
-                    anchors.top: dock.position === "top" ? parent.top : undefined
-                    anchors.topMargin: -dock.crossPad * 0.7
+                    x: dock.position === "left" ? -dock.crossPad * 0.7 : (dock.position === "right" ? parent.width - width + dock.crossPad * 0.7 : (parent.width - width) / 2)
+                    y: dock.position === "top" ? -dock.crossPad * 0.7 : (dock.position === "bottom" ? parent.height - height + dock.crossPad * 0.7 : (parent.height - height) / 2)
                     Repeater {
-                        model: dock.cfg.show_instance_count !== false ? Math.min(3, cell.modelData.windows.length) : 1
+                        model: Math.min(3, cell.modelData.windows.length)
                         delegate: Rectangle {
-                            width: cell.active ? 10 : 5
-                            height: 4
-                            radius: 2
-                            color: cell.active ? Theme.primary : Theme.fgSurfaceVariant
+                            width: cell.dot
+                            height: cell.dot
+                            radius: cell.dot / 2
+                            color: cell.active ? Theme.primary : Theme.secondary
                         }
+                    }
+                }
+
+                // show_instance_count: window count badge (>= 2) on the screen-interior corner
+                Rectangle {
+                    readonly property real bd: Math.max(16, dock.iconSize * 0.3)
+                    readonly property int count: cell.modelData.windows.length
+                    visible: dock.cfg.show_instance_count !== false && count >= 2
+                    width: bd
+                    height: bd
+                    radius: bd / 2
+                    color: Theme.primary
+                    x: dock.position === "right" ? icon.x - bd * (1 - 0.55) : icon.x + icon.width - bd * 0.55
+                    y: dock.position === "top" ? icon.y + icon.height - bd * (1 - 0.45) : icon.y - bd * 0.45
+                    NText {
+                        anchors.centerIn: parent
+                        text: parent.count > 9 ? "9+" : String(parent.count)
+                        size: parent.bd * 0.72 * 0.75
+                        weight: Font.Bold
+                        color: Theme.fgPrimary
                     }
                 }
 

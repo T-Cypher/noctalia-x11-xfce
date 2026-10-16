@@ -18,10 +18,6 @@ BarWidget {
 
     hideWidget: items.length === 0
     padding: Style.spaceXs * contentScale
-    defaultActions: ({
-            left: "none",
-            right: "none"
-        })
 
     Grid {
         rows: root.vertical ? -1 : 1

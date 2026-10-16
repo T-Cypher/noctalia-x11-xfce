@@ -20,11 +20,7 @@ BarWidget {
         return "";
     }
 
-    tooltipText: Network.connected ? (Network.primaryName + (Network.ipAddress ? "\n" + Network.ipAddress : "") + (Network.vpnActive ? "\nVPN: " + Network.vpnName : "")) : I18n.tr("control-center.network.disconnected", "Disconnected")
-    defaultActions: ({
-            left: "panel-toggle control-center network",
-            right: "wifi-toggle"
-        })
+    tooltipText: Network.connected ? (Network.primaryName + (Network.ipAddress ? "\n" + Network.ipAddress : "") + (Network.vpnActive ? "\nVPN: " + Network.vpnName : "")) : I18n.tr("control-center.network.not-connected", "Not connected")
 
     Row {
         spacing: Style.spaceXs * root.contentScale

@@ -14,17 +14,6 @@ BarWidget {
 
     hideWidget: !(input ? Audio.micReady : Audio.ready)
     tooltipText: (input ? I18n.tr("control-center.audio.input-device-prefix", "Input") + ": " + Audio.nodeName(Audio.source) : I18n.tr("control-center.audio.output-device-prefix", "Output") + ": " + Audio.nodeName(Audio.sink)) + "\n" + Math.round(level * 100) + "%"
-    defaultActions: input ? {
-        left: "panel-toggle control-center audio",
-        right: "mic-mute",
-        scroll_up: "mic-volume-up",
-        scroll_down: "mic-volume-down"
-    } : {
-        left: "panel-toggle control-center audio",
-        right: "volume-mute",
-        scroll_up: "volume-up",
-        scroll_down: "volume-down"
-    }
 
     Row {
         spacing: Style.spaceXs * root.contentScale

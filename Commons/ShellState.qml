@@ -43,7 +43,8 @@ Singleton {
     }
 
     function save() {
-        if (!dirsReady) {
+        // Never write before the existing state was read, or it would be clobbered.
+        if (!dirsReady || !loaded) {
             saveTimer.restart();
             return;
         }

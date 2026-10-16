@@ -21,8 +21,6 @@ function parse(text) {
     var line = 1;
     var root = {};
     var current = root;
-    // Tables that were explicitly defined with [header] (to detect duplicates loosely)
-    var arrayTables = [];
 
     function fail(msg) {
         throw new TomlError(msg, line);
@@ -329,6 +327,12 @@ function parse(text) {
         }
     }
 
+    function parseInlineTableSealed() {
+        var t = parseInlineTable();
+        sealInline(t);
+        return t;
+    }
+
     function parseValue() {
         skipWs();
         var c = peek();
@@ -351,7 +355,7 @@ function parse(text) {
         if (c === "[")
             return parseArray();
         if (c === "{")
-            return parseInlineTable();
+            return parseInlineTableSealed();
         return parseNumberOrDate();
     }
 
@@ -359,47 +363,96 @@ function parse(text) {
         return v !== null && typeof v === "object" && !Array.isArray(v);
     }
 
+    // Definition tracking (TOML 1.0 rules): a table is "implicit" (created as a parent of a
+    // [header]), "header" (defined by a [header]), "dotted" (created by a dotted key) or
+    // "inline" (immutable). Arrays of tables are tracked separately from static arrays.
+    var kinds = new Map();
+    var aotArrays = new Set();
+    kinds.set(root, "header");
+
+    function kindOf(o) {
+        return kinds.has(o) ? kinds.get(o) : "implicit";
+    }
+
+    function sealInline(o) {
+        if (Array.isArray(o)) {
+            for (var i = 0; i < o.length; i++)
+                sealInline(o[i]);
+        } else if (isPlainObject(o)) {
+            kinds.set(o, "inline");
+            for (var k in o)
+                sealInline(o[k]);
+        }
+    }
+
     function assignDotted(target, keyParts, value) {
         var obj = target;
+        var name = keyParts.join(".");
         for (var i = 0; i < keyParts.length - 1; i++) {
             var k = keyParts[i];
-            if (obj[k] === undefined)
+            if (!Object.prototype.hasOwnProperty.call(obj, k)) {
                 obj[k] = {};
-            else if (Array.isArray(obj[k]) && obj[k].length > 0 && isPlainObject(obj[k][obj[k].length - 1]))
-                obj[k] = obj[k];
-            else if (!isPlainObject(obj[k]))
-                fail("Key '" + keyParts.join(".") + "' conflicts with an existing value");
-            obj = Array.isArray(obj[k]) ? obj[k][obj[k].length - 1] : obj[k];
+                kinds.set(obj[k], "dotted");
+            } else if (!isPlainObject(obj[k])) {
+                fail("Key '" + name + "' conflicts with an existing value");
+            } else {
+                var kind = kindOf(obj[k]);
+                if (kind === "inline")
+                    fail("Inline table '" + keyParts.slice(0, i + 1).join(".") + "' cannot be extended");
+                if (kind === "header")
+                    fail("Table '" + keyParts.slice(0, i + 1).join(".") + "' is already defined");
+            }
+            obj = obj[k];
         }
         var last = keyParts[keyParts.length - 1];
+        if (Object.prototype.hasOwnProperty.call(obj, last))
+            fail("Duplicate key '" + name + "'");
         obj[last] = value;
     }
 
     function resolveTable(keyParts, isArray) {
         var obj = root;
+        var name = keyParts.join(".");
         for (var i = 0; i < keyParts.length; i++) {
             var k = keyParts[i];
             var isLast = i === keyParts.length - 1;
+            var exists = Object.prototype.hasOwnProperty.call(obj, k);
             if (isLast && isArray) {
-                if (obj[k] === undefined)
+                if (!exists) {
                     obj[k] = [];
-                if (!Array.isArray(obj[k]))
-                    fail("Key '" + keyParts.join(".") + "' is not an array of tables");
+                    aotArrays.add(obj[k]);
+                } else if (!Array.isArray(obj[k]) || !aotArrays.has(obj[k])) {
+                    fail("Key '" + name + "' is not an array of tables");
+                }
                 var t = {};
+                kinds.set(t, "header");
                 obj[k].push(t);
                 return t;
             }
-            if (obj[k] === undefined)
+            if (!exists) {
                 obj[k] = {};
-            if (Array.isArray(obj[k])) {
-                if (obj[k].length === 0)
-                    obj[k].push({});
-                obj = obj[k][obj[k].length - 1];
-            } else if (isPlainObject(obj[k])) {
+                kinds.set(obj[k], isLast ? "header" : "implicit");
                 obj = obj[k];
-            } else {
-                fail("Key '" + keyParts.join(".") + "' is not a table");
+                continue;
             }
+            var v = obj[k];
+            if (Array.isArray(v)) {
+                if (isLast || !aotArrays.has(v) || v.length === 0)
+                    fail("Key '" + name + "' conflicts with an array");
+                obj = v[v.length - 1];
+                continue;
+            }
+            if (!isPlainObject(v))
+                fail("Key '" + name + "' is not a table");
+            var kind = kindOf(v);
+            if (kind === "inline")
+                fail("Inline table '" + keyParts.slice(0, i + 1).join(".") + "' cannot be extended");
+            if (isLast) {
+                if (kind !== "implicit")
+                    fail("Table '" + name + "' is defined more than once");
+                kinds.set(v, "header");
+            }
+            obj = v;
         }
         return obj;
     }
@@ -438,48 +491,4 @@ function parse(text) {
         expectLineEnd();
     }
     return root;
-}
-
-// Serialize a flat-ish JS object back to TOML (used for writing small state/override files).
-function stringify(obj) {
-    var lines = [];
-    function fmtKey(k) {
-        return /^[A-Za-z0-9_\-]+$/.test(k) ? k : JSON.stringify(k);
-    }
-    function fmtValue(v) {
-        if (typeof v === "string")
-            return JSON.stringify(v);
-        if (typeof v === "boolean" || typeof v === "number")
-            return String(v);
-        if (Array.isArray(v))
-            return "[" + v.map(fmtValue).join(", ") + "]";
-        if (v && typeof v === "object") {
-            var parts = [];
-            for (var k in v)
-                parts.push(fmtKey(k) + " = " + fmtValue(v[k]));
-            return "{ " + parts.join(", ") + " }";
-        }
-        return "\"\"";
-    }
-    function walk(o, path) {
-        var tables = [];
-        var simple = [];
-        for (var k in o) {
-            var v = o[k];
-            if (v && typeof v === "object" && !Array.isArray(v))
-                tables.push(k);
-            else
-                simple.push(k);
-        }
-        if (path.length > 0 && (simple.length > 0 || tables.length === 0))
-            lines.push("[" + path.map(fmtKey).join(".") + "]");
-        for (var i = 0; i < simple.length; i++)
-            lines.push(fmtKey(simple[i]) + " = " + fmtValue(o[simple[i]]));
-        if (simple.length > 0)
-            lines.push("");
-        for (var j = 0; j < tables.length; j++)
-            walk(o[tables[j]], path.concat([tables[j]]));
-    }
-    walk(obj, []);
-    return lines.join("\n") + "\n";
 }

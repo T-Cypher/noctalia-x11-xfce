@@ -154,7 +154,8 @@ Singleton {
         running: true
         command: ["sh", "-c", "for h in /sys/class/hwmon/hwmon*; do n=$(cat $h/name 2>/dev/null); case $n in coretemp|k10temp|zenpower|cpu_thermal|soc_thermal|acpitz) for f in $h/temp1_input $h/temp*_input; do [ -r $f ] && { echo $f; exit 0; }; done;; esac; done; for z in /sys/class/thermal/thermal_zone*; do t=$(cat $z/type 2>/dev/null); case $t in x86_pkg_temp|cpu*|acpitz|soc*) echo $z/temp; exit 0;; esac; done"]
         stdout: StdioCollector {
-            onStreamFinished: root._tempPath = text.trim()
+            // [system.monitor] cpu_temp_sensor_path overrides the auto-detected sensor
+            onStreamFinished: root._tempPath = String(Config.get("system.monitor.cpu_temp_sensor_path", "")) !== "" ? Config.expandPath(Config.get("system.monitor.cpu_temp_sensor_path", "")) : text.trim()
         }
     }
 
@@ -175,8 +176,10 @@ Singleton {
     }
 
     Timer {
-        interval: Math.max(500, Number(Config.get("system.monitor.cpu_poll_seconds", 2)) * 1000)
-        running: root.active
+        // noctalia: 0 disables the metric; other values are clamped to 1..120 s
+        readonly property real seconds: Number(Config.get("system.monitor.cpu_poll_seconds", 2))
+        interval: Math.max(1000, Math.min(120000, seconds * 1000))
+        running: root.active && seconds > 0
         repeat: true
         triggeredOnStart: true
         onTriggered: {
@@ -188,22 +191,28 @@ Singleton {
         }
     }
     Timer {
-        interval: Math.max(500, Number(Config.get("system.monitor.memory_poll_seconds", 2)) * 1000)
-        running: root.active
+        // noctalia: 0 disables the metric; other values are clamped to 1..120 s
+        readonly property real seconds: Number(Config.get("system.monitor.memory_poll_seconds", 2))
+        interval: Math.max(1000, Math.min(120000, seconds * 1000))
+        running: root.active && seconds > 0
         repeat: true
         triggeredOnStart: true
         onTriggered: memFile.reload()
     }
     Timer {
-        interval: Math.max(500, Number(Config.get("system.monitor.network_poll_seconds", 3)) * 1000)
-        running: root.active
+        // noctalia: 0 disables the metric; other values are clamped to 1..120 s
+        readonly property real seconds: Number(Config.get("system.monitor.network_poll_seconds", 3))
+        interval: Math.max(1000, Math.min(120000, seconds * 1000))
+        running: root.active && seconds > 0
         repeat: true
         triggeredOnStart: true
         onTriggered: netFile.reload()
     }
     Timer {
-        interval: Math.max(1000, Number(Config.get("system.monitor.disk_poll_seconds", 10)) * 1000)
-        running: root.active
+        // noctalia: 0 disables the metric; other values are clamped to 1..120 s
+        readonly property real seconds: Number(Config.get("system.monitor.disk_poll_seconds", 10))
+        interval: Math.max(1000, Math.min(120000, seconds * 1000))
+        running: root.active && seconds > 0
         repeat: true
         triggeredOnStart: true
         onTriggered: dfProc.running = true

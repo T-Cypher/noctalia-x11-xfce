@@ -9,9 +9,4 @@ BarWidget {
     padding: 0
     implicitWidth: vertical ? capsuleThickness : length
     implicitHeight: vertical ? length : capsuleThickness
-    defaultActions: settings.interactive === true ? {} : {
-        left: "none",
-        right: "panel-toggle control-center home",
-        middle: "none"
-    }
 }

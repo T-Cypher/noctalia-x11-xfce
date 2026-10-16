@@ -10,35 +10,89 @@ Singleton {
     id: root
 
     readonly property string langSetting: String(Config.get("shell.lang", ""))
-    readonly property string systemLang: {
-        var l = Quickshell.env("LC_ALL") || Quickshell.env("LC_MESSAGES") || Quickshell.env("LANG") || "en";
-        return String(l).split(".")[0];
-    }
+    // $LC_ALL / $LC_MESSAGES / $LANG, first non-empty (like noctalia's detectSystemLanguage).
+    readonly property string systemLang: Quickshell.env("LC_ALL") || Quickshell.env("LC_MESSAGES") || Quickshell.env("LANG") || ""
     readonly property var available: ["ar", "be", "be-Latn", "ca", "cs", "de", "en", "es", "fr", "gl-ES", "he", "hu", "it", "ja", "ko", "ku", "nl", "nn", "pl", "pt-BR", "ru", "sv", "tr", "uk-UA", "vi", "zh-Hans", "zh-Hant"]
+
+    // noctalia's normalizeLanguageTag: strip .charset and @modifier, '_' -> '-', C/POSIX -> "".
+    function normalizeTag(raw) {
+        var s = String(raw || "");
+        var dot = s.indexOf(".");
+        if (dot >= 0)
+            s = s.slice(0, dot);
+        var at = s.indexOf("@");
+        if (at >= 0)
+            s = s.slice(0, at);
+        s = s.replace(/_/g, "-");
+        if (s === "" || s === "C" || s === "POSIX")
+            return "";
+        var parts = s.split("-");
+        if (parts[0] === "")
+            return "";
+        var out = [parts[0].toLowerCase()];
+        for (var i = 1; i < parts.length; i++) {
+            var p = parts[i];
+            if (p === "")
+                return "";
+            if (/^[A-Za-z]{4}$/.test(p))
+                out.push(p.charAt(0).toUpperCase() + p.slice(1).toLowerCase());
+            else if (/^([A-Za-z]{2}|[0-9]{3})$/.test(p))
+                out.push(p.toUpperCase());
+            else
+                out.push(p.toLowerCase());
+        }
+        return out.join("-");
+    }
+
+    // noctalia's catalogLanguageCandidates (no cross-region fallback: pt_PT does not pick pt-BR).
+    function candidates(tag) {
+        var out = [];
+        function add(c) {
+            if (c && out.indexOf(c) < 0)
+                out.push(c);
+        }
+        if (tag === "")
+            return out;
+        var parts = tag.split("-");
+        var language = parts[0], script = "", region = "", scriptIndex = 0;
+        for (var i = 1; i < parts.length; i++) {
+            if (/^[A-Z][a-z]{3}$/.test(parts[i]) && script === "") {
+                script = parts[i];
+                scriptIndex = i;
+            } else if (/^([A-Z]{2}|[0-9]{3})$/.test(parts[i]) && region === "") {
+                region = parts[i];
+            }
+        }
+        var inferred = script;
+        if (script === "" && region !== "") {
+            if (language === "zh" && ["CN", "SG", "MY"].indexOf(region) >= 0)
+                inferred = "Hans";
+            else if (language === "zh" && ["TW", "HK", "MO"].indexOf(region) >= 0)
+                inferred = "Hant";
+            if (inferred !== "") {
+                var withScript = parts.slice();
+                withScript.splice(1, 0, inferred);
+                add(withScript.join("-"));
+            }
+        }
+        add(tag);
+        if (script !== "" && region !== "") {
+            var noScript = parts.slice();
+            noScript.splice(scriptIndex, 1);
+            add(noScript.join("-"));
+        }
+        if (inferred !== "")
+            add(language + "-" + inferred);
+        add(language);
+        return out;
+    }
+
     readonly property string lang: {
-        var want = langSetting !== "" ? langSetting : systemLang;
-        var norm = want.replace("_", "-");
-        var aliases = {
-            "zh-CN": "zh-Hans",
-            "zh-SG": "zh-Hans",
-            "zh-TW": "zh-Hant",
-            "zh-HK": "zh-Hant",
-            "zh-MO": "zh-Hant",
-            "nb": "nn",
-            "nb-NO": "nn",
-            "uk": "uk-UA",
-            "gl": "gl-ES"
-        };
-        if (aliases[norm])
-            norm = aliases[norm];
-        if (available.indexOf(norm) >= 0)
-            return norm;
-        var base = norm.split("-")[0];
-        if (available.indexOf(base) >= 0)
-            return base;
-        for (var i = 0; i < available.length; i++)
-            if (available[i].split("-")[0] === base)
-                return available[i];
+        var tag = normalizeTag(langSetting !== "" ? langSetting : systemLang);
+        var c = candidates(tag);
+        for (var i = 0; i < c.length; i++)
+            if (available.indexOf(c[i]) >= 0)
+                return c[i];
         return "en";
     }
 

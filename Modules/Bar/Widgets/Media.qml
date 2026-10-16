@@ -25,14 +25,6 @@ BarWidget {
     hideWidget: (settings.hide_when_no_media === true && !Media.hasPlayer) || (settings.hide_when_idle === true && !Media.isPlaying)
     tooltipText: Media.hasPlayer ? (Media.title + (Media.artist ? "\n" + Media.artist : "") + (Media.player && Media.player.identity ? "\n" + Media.player.identity : "")) : ""
     minLength: vertical || artOnly ? capsuleThickness : minWidth
-    defaultActions: ({
-            left: "panel-toggle control-center media",
-            right: "media toggle",
-            back: "media previous",
-            forward: "media next",
-            scroll_up: "media next",
-            scroll_down: "media previous"
-        })
 
     Row {
         spacing: Style.spaceSm * root.contentScale
@@ -82,7 +74,6 @@ BarWidget {
                 elide: root.settings.title_scroll === "always" || (root.settings.title_scroll === "on_hover" && root.hovered) ? Text.ElideNone : Text.ElideRight
                 width: elide === Text.ElideNone ? implicitWidth : parent.width
                 muted: !Media.hasPlayer
-                x: 0
                 SequentialAnimation on x {
                     running: label.elide === Text.ElideNone && label.implicitWidth > root.maxWidth
                     loops: Animation.Infinite

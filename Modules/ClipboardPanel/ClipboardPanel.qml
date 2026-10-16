@@ -51,7 +51,7 @@ Item {
                 id: field
                 width: parent.width - clearBtn.width - parent.spacing
                 icon: "search"
-                placeholder: I18n.tr("clipboard.search", "Search clipboard history…")
+                placeholder: I18n.tr("clipboard.filter-placeholder", "Filter clipboard…")
                 onTextChanged: root.filter = text
                 onAccepted: root.pick(root.selected)
                 onEscapePressed: Panels.close()

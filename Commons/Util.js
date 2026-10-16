@@ -421,3 +421,26 @@ function parseHm(s, fallback) {
         return fallback;
     return parseInt(m[1], 10) * 60 + parseInt(m[2], 10);
 }
+
+// noctalia's parseNormalizedOrPercent (src/ipc/ipc_arg_parse.h): "65" / "65%" are percentages
+// (0..maxPercent); a decimal in 0..1 is normalized; 1 < x <= maxPercent is a percentage.
+// Returns the normalized value or null when invalid.
+function parseNormalizedOrPercent(token, maxPercent) {
+    var max = maxPercent === undefined ? 100 : maxPercent;
+    var value = String(token === undefined || token === null ? "" : token).trim();
+    var isPercent = false;
+    if (value.length > 0 && value.charAt(value.length - 1) === "%") {
+        isPercent = true;
+        value = value.slice(0, -1);
+    }
+    if (!/^[+-]?(\d+\.?\d*|\.\d+)$/.test(value))
+        return null;
+    var amount = parseFloat(value);
+    if (isPercent || value.indexOf(".") < 0)
+        return amount < 0 || amount > max ? null : amount / 100;
+    if (amount >= 0 && amount <= 1)
+        return amount;
+    if (amount > 1 && amount <= max)
+        return amount / 100;
+    return null;
+}

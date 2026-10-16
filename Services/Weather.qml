@@ -9,7 +9,9 @@ Singleton {
     id: root
 
     readonly property bool enabled: Config.get("weather.enabled", false) === true && Config.get("shell.offline_mode", false) !== true
-    readonly property bool fahrenheit: String(Config.get("weather.unit", "celsius")) === "fahrenheit"
+    // [weather] unit = "metric" | "imperial" (noctalia's useImperial: unit == "imperial";
+    // the legacy "fahrenheit" spelling is accepted too)
+    readonly property bool fahrenheit: ["imperial", "fahrenheit"].indexOf(String(Config.get("weather.unit", "metric"))) >= 0
     readonly property int refreshMinutes: Math.max(5, Number(Config.get("weather.refresh_minutes", 30)))
 
     // location

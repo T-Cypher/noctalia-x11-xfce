@@ -35,9 +35,10 @@ Singleton {
     }
     readonly property bool hasPerformance: profilesAvailable && PowerProfiles.hasPerformanceProfile
 
-    signal profileSwitched(string name)
-    signal batteryStateChanged(string state)
-    signal batteryLow(int percent)
+    property double lastShellChange: 0   // when the shell itself last changed the profile
+    signal batteryHookState(string state)              // charging | discharging | plugged
+    signal batteryPercentChanged(string state, int percent)
+    signal batteryWarning(int level, int percent)      // noctalia's escalating low-battery levels
 
     function profileLabel(name) {
         switch (name) {
@@ -62,28 +63,33 @@ Singleton {
         var p = name === "power-saver" ? PowerProfile.PowerSaver : name === "performance" ? PowerProfile.Performance : PowerProfile.Balanced;
         if (p === PowerProfile.Performance && !hasPerformance)
             return;
+        lastShellChange = Date.now();
         PowerProfiles.profile = p;
-        profileSwitched(name);
     }
 
-    function cycleProfile() {
+    // power-cycle: step through the ordered profile list (wraps), forward by default.
+    function cycleProfile(direction) {
         var order = hasPerformance ? ["power-saver", "balanced", "performance"] : ["power-saver", "balanced"];
         var i = order.indexOf(profileName);
-        setProfile(order[(i + 1) % order.length]);
+        var d = direction === -1 ? -1 : 1;
+        setProfile(order[((i < 0 ? 0 : i) + d + order.length) % order.length]);
     }
 
+    // noctalia's batteryGlyphName
     function batteryGlyph() {
         if (!hasBattery)
             return "battery-plugged";
         if (charging)
             return "battery-charging";
-        if (pluggedIn && fullyCharged)
+        if (fullyCharged || (device && device.state === UPowerDeviceState.PendingCharge))
             return "battery-plugged";
+        if (device && device.state === UPowerDeviceState.Unknown && percent <= 0)
+            return "battery-exclamation";
         if (percent >= 85)
             return "battery-4";
-        if (percent >= 60)
+        if (percent >= 55)
             return "battery-3";
-        if (percent >= 35)
+        if (percent >= 30)
             return "battery-2";
         if (percent >= 10)
             return "battery-1";
@@ -102,23 +108,83 @@ Singleton {
         return I18n.tr("power.battery.states.discharging", "Discharging");
     }
 
-    property string lastState: ""
-    property bool warnedLow: false
-    onChargingChanged: emitState()
-    onPluggedInChanged: emitState()
-    onPercentChanged: {
-        if (hasBattery && !charging && percent <= 15 && !warnedLow) {
-            warnedLow = true;
-            batteryLow(percent);
-        } else if (percent > 20) {
-            warnedLow = false;
+    // UPower state names used by NOCTALIA_BATTERY_STATE
+    function upowerStateName() {
+        if (!device)
+            return "unknown";
+        switch (device.state) {
+        case UPowerDeviceState.Charging: return "charging";
+        case UPowerDeviceState.Discharging: return "discharging";
+        case UPowerDeviceState.Empty: return "empty";
+        case UPowerDeviceState.FullyCharged: return "fully_charged";
+        case UPowerDeviceState.PendingCharge: return "pending_charge";
+        case UPowerDeviceState.PendingDischarge: return "pending_discharge";
         }
+        return "unknown";
     }
-    function emitState() {
-        var s = charging ? "charging" : (pluggedIn ? "plugged" : "discharging");
-        if (s !== lastState && lastState !== "")
-            batteryStateChanged(s);
-        lastState = s;
+
+    // battery_charging / battery_discharging / battery_plugged hooks: fire on entering a tracked
+    // state; intermediate UPower states do not retrigger them.
+    property string hookState: ""
+    readonly property string currentHookState: {
+        if (!hasBattery)
+            return "";
+        var st = upowerStateName();
+        if (st === "charging")
+            return "charging";
+        if (st === "discharging")
+            return "discharging";
+        if (st === "fully_charged" || st === "pending_charge")
+            return "plugged";
+        return "";
+    }
+    onCurrentHookStateChanged: {
+        if (currentHookState === "" || currentHookState === hookState)
+            return;
+        var first = hookState === "";
+        hookState = currentHookState;
+        if (!first)
+            batteryHookState(currentHookState);
+    }
+    property int lastHookPercent: -1
+    onPercentChanged: {
+        if (hasBattery && lastHookPercent >= 0 && percent !== lastHookPercent)
+            batteryPercentChanged(upowerStateName(), percent);
+        lastHookPercent = hasBattery ? percent : -1;
+        evaluateWarning();
+    }
+    onChargingChanged: evaluateWarning()
+    onPluggedInChanged: evaluateWarning()
+
+    // noctalia's BatteryWarningMonitor for the system battery: levels [threshold, 5, 2]; fires
+    // once per level while draining, re-arms on charge / plug-in / partial recharge.
+    property int firedLevel: 1000
+    function evaluateWarning() {
+        var threshold = Number(Config.get("battery.warning_threshold", 10));
+        var plugged = charging || fullyCharged || (device && device.state === UPowerDeviceState.PendingCharge);
+        if (!hasBattery || plugged || !(threshold > 0)) {
+            firedLevel = 1000;
+            return;
+        }
+        var points = [threshold];
+        if (5 < threshold)
+            points.push(5);
+        if (2 < threshold)
+            points.push(2);
+        var level = 1000;
+        for (var i = 0; i < points.length; i++)
+            if (points[i] >= percent)
+                level = points[i];
+        if (level === 1000) {
+            firedLevel = 1000;
+            return;
+        }
+        if (level < firedLevel) {
+            firedLevel = level;
+            batteryWarning(level, percent);
+        } else if (level > firedLevel) {
+            firedLevel = level;
+        }
     }
 
     Process {

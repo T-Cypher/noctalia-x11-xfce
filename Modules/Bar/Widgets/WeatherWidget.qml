@@ -10,9 +10,6 @@ BarWidget {
     readonly property var cur: Weather.current
     hideWidget: !Weather.enabled
     tooltipText: cur ? (Weather.locationName + "\n" + Weather.describe(cur.code) + " · " + Weather.temp(cur.temp) + "\n" + I18n.tr("control-center.weather.details.feels-like", "Feels like") + " " + Weather.temp(cur.feels)) : (Weather.error || I18n.tr("weather.loading", "Loading weather…"))
-    defaultActions: ({
-            left: "panel-toggle control-center weather"
-        })
 
     Row {
         spacing: Style.spaceXs * root.contentScale

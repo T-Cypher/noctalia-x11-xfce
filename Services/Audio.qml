@@ -22,7 +22,8 @@ Singleton {
     readonly property real micVolume: source && source.audio ? source.audio.volume : 0
     readonly property bool micMuted: source && source.audio ? source.audio.muted : true
     readonly property real maxVolume: Config.get("audio.enable_overdrive", false) ? 1.5 : 1.0
-    readonly property real step: Math.max(0.01, Number(Config.get("audio.volume_step", 5)) / 100)
+    // noctalia's kVolumeStepDefault (IPC/gesture commands accept an explicit [step]).
+    readonly property real step: 0.05
 
     readonly property var nodes: Pipewire.nodes.values
     readonly property var sinks: nodes.filter(n => n && n.isSink && !n.isStream && n.audio)
@@ -56,7 +57,6 @@ Singleton {
     function setVolume(v) {
         if (!ready)
             return;
-        sink.audio.muted = false;
         sink.audio.volume = clampValue(v, 0, maxVolume);
         volumeAdjusted(false);
     }
@@ -72,8 +72,7 @@ Singleton {
     function setMicVolume(v) {
         if (!micReady)
             return;
-        source.audio.muted = false;
-        source.audio.volume = clampValue(v, 0, 1.0);
+        source.audio.volume = clampValue(v, 0, maxVolume);
         volumeAdjusted(true);
     }
     function changeMicVolume(delta) {
@@ -96,27 +95,13 @@ Singleton {
         return Math.max(lo, Math.min(hi, v));
     }
 
-    // Parse IPC volume arguments: "65", "65%", "0.65"
-    function parseLevel(arg, fallback) {
-        if (arg === undefined || arg === null || String(arg).trim() === "")
-            return fallback;
-        var s = String(arg).trim();
-        var pct = s.endsWith("%");
-        var n = parseFloat(pct ? s.slice(0, -1) : s);
-        if (isNaN(n))
-            return fallback;
-        if (pct || n > 1.5)
-            return n / 100;
-        return n;
-    }
-
+    // noctalia's audioVolumeGlyph
     function volumeGlyph(v, m) {
-        if (m || v <= 0.001)
+        if (m || Math.round(Math.max(0, v) * 100) === 0)
             return "volume-mute";
-        if (v < 0.34)
-            return "volume-zero";
-        if (v < 0.67)
-            return "volume-low";
-        return "volume-high";
+        return v < 0.4 ? "volume-low" : "volume-high";
+    }
+    function micGlyph(v, m) {
+        return m || Math.round(Math.max(0, v) * 100) === 0 ? "microphone-mute" : "microphone";
     }
 }

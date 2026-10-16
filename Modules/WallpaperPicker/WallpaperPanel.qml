@@ -49,7 +49,7 @@ Item {
                 id: field
                 width: parent.width - actions.width - parent.spacing
                 icon: "search"
-                placeholder: I18n.tr("wallpaper.search", "Search wallpapers…") + "  (" + Wallpaper.files.length + " in " + Wallpaper.directory + ")"
+                placeholder: I18n.tr("wallpaper.panel.filter-placeholder", "Filter…") + "  (" + Wallpaper.files.length + " in " + Wallpaper.directory + ")"
                 onTextChanged: root.filter = text
                 onAccepted: root.apply(root.selected)
                 onEscapePressed: Panels.close()
@@ -191,7 +191,7 @@ Item {
                     color: Theme.fgSurfaceVariant
                 }
                 NText {
-                    text: Wallpaper.scanning ? I18n.tr("wallpaper.scanning", "Scanning…") : I18n.tr("wallpaper.empty", "No images found in") + " " + Wallpaper.directory
+                    text: Wallpaper.scanning ? I18n.tr("wallpaper.panel.loading", "Loading wallpapers…") : I18n.tr("wallpaper.empty", "No images found in") + " " + Wallpaper.directory
                     muted: true
                 }
             }

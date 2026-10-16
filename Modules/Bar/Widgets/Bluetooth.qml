@@ -12,10 +12,6 @@ BarWidget {
 
     hideWidget: !BluetoothService.available || (settings.hide_when_adapter_off === true && !BluetoothService.enabled) || (settings.hide_when_no_connected_device === true && connected.length === 0)
     tooltipText: !BluetoothService.enabled ? I18n.tr("control-center.bluetooth.off", "Bluetooth is off") : (connected.length > 0 ? connected.map(d => BluetoothService.deviceName(d)).join("\n") : I18n.tr("control-center.shortcuts.bluetooth", "Bluetooth"))
-    defaultActions: ({
-            left: "panel-toggle control-center bluetooth",
-            right: "bluetooth-toggle"
-        })
 
     Row {
         spacing: Style.spaceXs * root.contentScale

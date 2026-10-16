@@ -37,7 +37,7 @@ Item {
                 ListRow {
                     width: parent.width
                     glyph: Network.glyph()
-                    title: Network.connected ? Network.primaryName : I18n.tr("control-center.network.disconnected", "Disconnected")
+                    title: Network.connected ? Network.primaryName : I18n.tr("control-center.network.not-connected", "Not connected")
                     subtitle: Network.connected ? [Network.primaryType === "wifi" ? Network.signal + "%" : "Ethernet", Network.ipAddress, Network.vpnActive ? "VPN " + Network.vpnName : ""].filter(x => x).join("  ·  ") : ""
                     clickable: false
                     NButton {
@@ -89,7 +89,7 @@ Item {
                 anchors.margins: Style.cardPadding
                 spacing: Style.spaceSm
                 NText {
-                    text: I18n.tr("control-center.network.password-for", "Password for") + " " + root.promptSsid
+                    text: I18n.tr("control-center.network.password-prompt-for", "Enter password for {ssid}", { ssid: root.promptSsid })
                     weight: Font.Medium
                 }
                 Row {
@@ -183,7 +183,7 @@ Item {
                 NText {
                     anchors.centerIn: parent
                     visible: list.count === 0
-                    text: Network.scanning ? I18n.tr("control-center.network.scanning", "Scanning…") : I18n.tr("control-center.network.no-networks", "No networks found")
+                    text: Network.scanning ? I18n.tr("bar.widgets.network.scanning", "Scanning") : I18n.tr("control-center.network.no-networks", "No networks found")
                     muted: true
                 }
             }

@@ -44,30 +44,6 @@ BarWidget {
 
     hideWidget: widgetType === "power_profile" && !Power.profilesAvailable
     tooltipText: state_.tip
-    defaultActions: {
-        switch (widgetType) {
-        case "caffeine":
-            return {
-                left: "caffeine-toggle"
-            };
-        case "nightlight":
-            return {
-                left: "nightlight-toggle",
-                right: "nightlight-force-toggle"
-            };
-        case "power_profile":
-            return {
-                left: "power-cycle",
-                scroll_up: "power-cycle",
-                scroll_down: "power-cycle"
-            };
-        case "theme_mode":
-            return {
-                left: "theme-mode-toggle"
-            };
-        }
-        return {};
-    }
 
     NIcon {
         icon: root.settings.glyph || root.state_.glyph

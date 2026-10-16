@@ -26,11 +26,6 @@ BarWidget {
 
     padding: Style.spaceXs * contentScale
     tooltipText: ""
-    defaultActions: ({
-            scroll_up: "workspace-previous",
-            scroll_down: "workspace-next",
-            right: "panel-toggle control-center home"
-        })
 
     function label(i) {
         var name = X11.desktopNames[i] || "";

@@ -11,12 +11,19 @@ import "Palettes.js" as Palettes
 Singleton {
     id: root
 
+    // App-facing mode ([theme] mode, or a theme-mode-set/toggle override persisted in state).
     readonly property string configuredMode: String(Config.get("theme.mode", "dark"))
-    // Runtime override from theme-mode-toggle / theme-mode-set (persisted in state)
     readonly property string modeOverride: ShellState.data.theme_mode || ""
     readonly property string requestedMode: modeOverride !== "" ? modeOverride : configuredMode
     property bool autoIsNight: true
-    readonly property string mode: requestedMode === "auto" ? (autoIsNight ? "dark" : "light") : (requestedMode === "light" ? "light" : "dark")
+    function resolveMode(m) {
+        return m === "auto" ? (autoIsNight ? "dark" : "light") : (m === "light" ? "light" : "dark");
+    }
+    readonly property string appMode: resolveMode(requestedMode)
+    readonly property bool appIsDark: appMode === "dark"
+    // Mode of the shell's own surfaces: [theme] shell_mode (follow | dark | light | auto).
+    readonly property string shellModeSetting: String(Config.get("theme.shell_mode", "follow"))
+    readonly property string mode: ["dark", "light", "auto"].indexOf(shellModeSetting) >= 0 ? resolveMode(shellModeSetting) : appMode
     readonly property bool isDark: mode === "dark"
 
     readonly property string source: String(ShellState.data.theme_source || Config.get("theme.source", "builtin"))
@@ -24,11 +31,14 @@ Singleton {
         var n = String(ShellState.data.theme_builtin || Config.get("theme.builtin", "Noctalia"));
         return Palettes.palettes[n] ? n : "Noctalia";
     }
+    readonly property string wallpaperScheme: String(ShellState.data.theme_wallpaper_scheme || Config.get("theme.wallpaper_scheme", "m3-content"))
     readonly property bool pureBlack: Config.get("theme.pure_black_dark", false) === true
+    readonly property bool highContrast: Config.get("accessibility.high_contrast", false) === true
     readonly property var paletteNames: Palettes.names
 
-    // Wallpaper-generated palette (set by Wallpaper service through ColorQuantizer)
-    property var wallpaperPalette: null
+    // Dominant wallpaper colors (set by the Wallpaper service through ColorQuantizer).
+    property var wallpaperColors: []
+    readonly property var wallpaperPalette: wallpaperColors.length > 0 ? paletteFromColors(wallpaperColors, wallpaperScheme) : null
 
     readonly property var basePalette: {
         var p;
@@ -36,14 +46,78 @@ Singleton {
             p = wallpaperPalette[mode];
         else
             p = Palettes.palettes[builtinName][mode];
-        if (pureBlack && mode === "dark") {
-            var c = Object.assign({}, p);
-            c.surface = "#000000";
-            c.surfaceVariant = mixHex(p.surfaceVariant, "#000000", 0.45);
-            c.shadow = "#000000";
-            p = c;
-        }
+        if (pureBlack && mode === "dark")
+            p = pureBlackTransform(p);
+        if (highContrast)
+            p = highContrastTransform(p, mode === "dark");
         return p;
+    }
+
+    // ---------------------------------------------------------------- tone transforms
+    // noctalia shifts HCT tones; CIELAB L* is the same lightness scale (tone == L*), and keeping
+    // a*/b* preserves hue and chroma closely enough for these transforms.
+    function labOf(hex) {
+        var c = Qt.color(hex);
+        function lin(v) {
+            return v <= 0.04045 ? v / 12.92 : Math.pow((v + 0.055) / 1.055, 2.4);
+        }
+        var r = lin(c.r), g = lin(c.g), b = lin(c.b);
+        var x = (0.4124 * r + 0.3576 * g + 0.1805 * b) / 0.95047;
+        var y = 0.2126 * r + 0.7152 * g + 0.0722 * b;
+        var z = (0.0193 * r + 0.1192 * g + 0.9505 * b) / 1.08883;
+        function f(t) {
+            return t > 0.008856 ? Math.cbrt(t) : 7.787 * t + 16 / 116;
+        }
+        var fx = f(x), fy = f(y), fz = f(z);
+        return {
+            l: 116 * fy - 16,
+            a: 500 * (fx - fy),
+            b: 200 * (fy - fz)
+        };
+    }
+    function hexFromLab(l, a, b) {
+        if (l <= 0.5)
+            return "#000000";
+        var fy = (l + 16) / 116, fx = fy + a / 500, fz = fy - b / 200;
+        function finv(t) {
+            return t > 0.206893 ? t * t * t : (t - 16 / 116) / 7.787;
+        }
+        var x = finv(fx) * 0.95047, y = finv(fy), z = finv(fz) * 1.08883;
+        var r = 3.2406 * x - 1.5372 * y - 0.4986 * z;
+        var g = -0.9689 * x + 1.8758 * y + 0.0415 * z;
+        var bb = 0.0557 * x - 0.2040 * y + 1.0570 * z;
+        function gam(v) {
+            v = Math.max(0, Math.min(1, v));
+            return v <= 0.0031308 ? 12.92 * v : 1.055 * Math.pow(v, 1 / 2.4) - 0.055;
+        }
+        return hexOf(Qt.rgba(gam(r), gam(g), gam(bb), 1));
+    }
+    function withTone(hex, tone) {
+        var lab = labOf(hex);
+        return hexFromLab(Math.max(0, Math.min(100, tone)), lab.a, lab.b);
+    }
+    // pure_black_dark: shift the surface ramp down by the surface tone (surface becomes black).
+    function pureBlackTransform(p) {
+        var shift = labOf(p.surface).l;
+        if (shift <= 0)
+            return p;
+        var c = Object.assign({}, p);
+        c.surface = withTone(p.surface, 0);
+        c.surfaceVariant = withTone(p.surfaceVariant, labOf(p.surfaceVariant).l - shift);
+        return c;
+    }
+    // accessibility.high_contrast: stretch tones apart; outlines become strongly visible.
+    function highContrastTransform(p, dark) {
+        var c = {};
+        for (var k in p) {
+            var t = labOf(p[k]).l;
+            if (k === "outline")
+                t = dark ? Math.max(t, 80) : Math.min(t, 20);
+            else
+                t = t < 50 ? Math.max(0, t - 20) : Math.min(100, t + 20);
+            c[k] = withTone(p[k], t);
+        }
+        return c;
     }
 
     readonly property int fadeMs: Style.animSlow
@@ -90,8 +164,21 @@ Singleton {
         return undefined;
     }
 
-    // Resolve a noctalia ColorSpec string: role token ("primary", "on_surface") or "#RRGGBB" / "#AARRGGBB".
-    // Optional alpha suffix "primary/0.5" or "#ff0000/0.5".
+    // Parse a hex color like noctalia: '#' optional; #RGB, #RGBA, #RRGGBB or #RRGGBBAA (alpha last).
+    function parseHex(str) {
+        var m = /^#?([0-9a-fA-F]{3,4}|[0-9a-fA-F]{6}|[0-9a-fA-F]{8})$/.exec(String(str).trim());
+        if (!m)
+            return null;
+        var h = m[1];
+        if (h.length <= 4)
+            h = h.split("").map(function (ch) {
+                return ch + ch;
+            }).join("");
+        return Qt.rgba(parseInt(h.substr(0, 2), 16) / 255, parseInt(h.substr(2, 2), 16) / 255, parseInt(h.substr(4, 2), 16) / 255, h.length === 8 ? parseInt(h.substr(6, 2), 16) / 255 : 1);
+    }
+
+    // Resolve a noctalia ColorSpec string: hex color (tried first, like noctalia) or a role token
+    // ("primary", "on_surface"). Port extension: optional alpha suffix "primary/0.5".
     function resolve(spec, fallback) {
         if (spec === undefined || spec === null || spec === "")
             return fallback !== undefined ? fallback : fgSurface;
@@ -100,17 +187,15 @@ Singleton {
         var slash = s.lastIndexOf("/");
         if (slash > 0) {
             alpha = Number(s.slice(slash + 1));
-            s = s.slice(0, slash);
+            s = s.slice(0, slash).trim();
             if (isNaN(alpha))
                 alpha = 1.0;
         }
-        var c = role(s.toLowerCase().replace(/-/g, "_"));
-        if (c === undefined) {
-            if (/^#([0-9a-fA-F]{6}|[0-9a-fA-F]{8})$/.test(s))
-                c = Qt.color(s);
-            else
-                return fallback !== undefined ? fallback : fgSurface;
-        }
+        var c = parseHex(s);
+        if (c === null)
+            c = role(s.toLowerCase().replace(/-/g, "_"));
+        if (c === undefined || c === null)
+            return fallback !== undefined ? fallback : fgSurface;
         return alpha < 1.0 ? Qt.rgba(c.r, c.g, c.b, c.a * alpha) : c;
     }
 
@@ -161,12 +246,16 @@ Singleton {
         if (!best)
             best = colors[0];
         var h = best.hslHue < 0 ? 0.6 : best.hslHue;
-        var sat = Math.max(0.35, Math.min(0.9, best.hslSaturation));
+        var sat = scheme === "faithful" ? Math.max(0.05, Math.min(1, best.hslSaturation)) : Math.max(0.35, Math.min(0.9, best.hslSaturation));
         if (scheme === "m3-monochrome" || scheme === "muted")
             sat = scheme === "muted" ? 0.25 : 0.0;
+        if (scheme === "soft")
+            sat = sat * 0.6;
         if (scheme === "vibrant" || scheme === "m3-fruit-salad" || scheme === "m3-rainbow")
             sat = Math.min(1, sat + 0.2);
         var h2 = second && second.hslHue >= 0 ? second.hslHue : h + 0.08;
+        if (scheme === "dysfunctional")
+            h2 = h + 0.5;
         var dark = {
             primary: hsl(h, sat, 0.78),
             onPrimary: hsl(h, sat * 0.6, 0.12),

@@ -96,9 +96,6 @@ BarWidget {
     }
 
     tooltipText: stat.replace(/_/g, " ") + ": " + info.text
-    defaultActions: ({
-            left: "panel-toggle control-center system"
-        })
 
     Component.onCompleted: SystemMonitor.consumers++
     Component.onDestruction: SystemMonitor.consumers--

@@ -2,10 +2,12 @@ import QtQuick
 import qs.Commons
 import qs.Services
 import qs.Widgets
+import "../../Commons/GestureDefaults.js" as GestureDefaults
 
 // Base for bar widgets: sizing from the bar's capsule thickness, optional capsule background,
 // hover highlight, tooltips, and noctalia's gesture -> action bindings
-// (widget defaults < [bar.<name>.actions] < [widget.<name>.actions]).
+// (builtin < type defaults < [bar.<name>.actions] < [widget.<name>.actions]; unbound gestures
+// fall through to the bar dead zone).
 Item {
     id: root
 
@@ -20,7 +22,8 @@ Item {
     readonly property real contentScale: (bar ? bar.contentScale : Style.uiScale) * widgetScale
     readonly property real fontScale: Number(barCfg.font_scale !== undefined ? barCfg.font_scale : 1) * Number(settings && settings.font_scale !== undefined ? settings.font_scale : 1)
     readonly property real glyphSize: 16 * contentScale
-    readonly property real fontSize: 13 * contentScale * fontScale
+    // noctalia: Style::fontSizeBody x content scale x font scale
+    readonly property real fontSize: 14 * contentScale * fontScale
     readonly property int fontWeight: Style.fontWeight(settings && settings.font_weight !== undefined ? settings.font_weight : (barCfg.font_weight !== undefined ? barCfg.font_weight : 500))
     readonly property string fontFamily: (settings && settings.font_family) ? settings.font_family : (barCfg.font_family ? barCfg.font_family : Style.fontFamily)
     readonly property real barThickness: bar ? bar.thickness : 34
@@ -30,7 +33,12 @@ Item {
         var r = settings && settings.capsule_radius !== undefined ? settings.capsule_radius : barCfg.capsule_radius;
         return r === undefined || r === "" ? Math.min(width, height) / 2 : Style.radius(Number(r));
     }
-    property real padding: Style.barCapsulePadding * contentScale
+    function widgetOr(key, fallback) {
+        if (settings && settings[key] !== undefined)
+            return settings[key];
+        return barCfg[key] !== undefined ? barCfg[key] : fallback;
+    }
+    property real padding: Number(widgetOr("capsule_padding", Style.barCapsulePadding)) * contentScale
     readonly property bool interactive: !(settings && settings.interactive === false)
     readonly property bool showTooltip: settings && settings.show_tooltip !== undefined ? settings.show_tooltip !== false : barCfg.show_tooltip !== false
 
@@ -47,8 +55,12 @@ Item {
     implicitWidth: vertical ? capsuleThickness : Math.max(minLength, contentItem.width + padding * 2)
     implicitHeight: vertical ? Math.max(minLength, contentItem.height + padding * 2) : capsuleThickness
 
+    // Widget color: per-widget `color`, else the bar's `icon_color` / `color`, else the capsule
+    // foreground when drawn in a capsule, else the widget's own state color.
     function iconColor(fallback) {
-        var c = settings && settings.color ? settings.color : "";
+        var c = settings && settings.color ? settings.color : (barCfg.icon_color || barCfg.color || "");
+        if (c === "" && capsule)
+            c = widgetOr("capsule_foreground", "");
         return c !== "" ? Theme.resolve(c, fallback) : (fallback !== undefined ? fallback : Theme.fgSurface);
     }
 
@@ -61,22 +73,32 @@ Item {
             return b[gesture];
         if (defaultActions[gesture] !== undefined)
             return defaultActions[gesture];
-        if (gesture === "right")
-            return "panel-toggle control-center home";
-        if (gesture === "middle")
-            return "settings-open";
-        return undefined;
+        var t = GestureDefaults.forType(widgetType, settings);
+        if (t[gesture] !== undefined)
+            return t[gesture];
+        return GestureDefaults.builtin[gesture];
     }
 
-    function dispatch(gesture) {
-        var a = actionFor(gesture);
-        if (a === undefined || a === null || a === "none")
+    function dispatch(gesture, mouse) {
+        if (GestureDefaults.isReserved(widgetType, gesture))
             return;
+        var a = interactive ? actionFor(gesture) : undefined;
         if (typeof a === "function") {
             a();
             return;
         }
-        Commands.run(String(a), bar ? bar.origin(root) : null);
+        if (a === undefined || a === null || String(a) === "" || String(a) === "none") {
+            // Unbound gestures behave like the bar's dead zone.
+            if (bar)
+                bar.deadZoneGesture(gesture, root, mouse);
+            return;
+        }
+        var origin = bar ? bar.origin(root) : null;
+        if (origin) {
+            origin.widgetName = widgetName;
+            origin.widget = root;
+        }
+        Commands.run(String(a), origin);
     }
 
     Rectangle {
@@ -84,9 +106,11 @@ Item {
         anchors.fill: parent
         radius: root.capsuleRadius
         visible: root.capsule
-        color: Theme.alpha(Theme.resolve(root.settings && root.settings.capsule_fill ? root.settings.capsule_fill : (root.barCfg.capsule_fill || "surface_variant")), Number(root.barCfg.capsule_opacity !== undefined ? root.barCfg.capsule_opacity : 1))
-        border.width: root.barCfg.capsule_border ? Number(root.barCfg.capsule_border_width || 1) : 0
-        border.color: root.barCfg.capsule_border ? Theme.resolve(root.barCfg.capsule_border) : "transparent"
+        readonly property color fill: Theme.resolve(root.widgetOr("capsule_fill", "surface_variant"), Theme.surfaceVariant)
+        color: Qt.rgba(fill.r, fill.g, fill.b, fill.a * Math.max(0, Math.min(1, Number(root.widgetOr("capsule_opacity", 1)))))
+        readonly property string borderSpec: String(root.widgetOr("capsule_border", ""))
+        border.width: borderSpec !== "" ? Number(root.widgetOr("capsule_border_width", 1)) * root.contentScale : 0
+        border.color: borderSpec !== "" ? Theme.resolve(borderSpec) : "transparent"
     }
 
     Rectangle {
@@ -121,31 +145,28 @@ Item {
     MouseArea {
         id: mouse
         anchors.fill: parent
-        enabled: root.interactive
-        hoverEnabled: true
+        hoverEnabled: root.interactive
         acceptedButtons: Qt.LeftButton | Qt.RightButton | Qt.MiddleButton | Qt.BackButton | Qt.ForwardButton
-        cursorShape: Qt.PointingHandCursor
-        property real wheelAccum: 0
+        cursorShape: root.interactive ? Qt.PointingHandCursor : Qt.ArrowCursor
+        property real wheelAccumY: 0
+        property real wheelAccumX: 0
         onClicked: mouse => {
             if (root.bar)
                 root.bar.dismissTooltip();
-            if (mouse.button === Qt.LeftButton)
-                root.dispatch("left");
-            else if (mouse.button === Qt.RightButton)
-                root.dispatch("right");
-            else if (mouse.button === Qt.MiddleButton)
-                root.dispatch("middle");
-            else if (mouse.button === Qt.BackButton)
-                root.dispatch("back");
-            else if (mouse.button === Qt.ForwardButton)
-                root.dispatch("forward");
+            var g = mouse.button === Qt.LeftButton ? "left" : mouse.button === Qt.RightButton ? "right" : mouse.button === Qt.MiddleButton ? "middle" : mouse.button === Qt.BackButton ? "back" : mouse.button === Qt.ForwardButton ? "forward" : "";
+            if (g !== "")
+                root.dispatch(g, mouse);
         }
         onWheel: wheel => {
-            var dy = wheel.angleDelta.y !== 0 ? wheel.angleDelta.y : -wheel.angleDelta.x;
-            wheelAccum += dy;
-            while (Math.abs(wheelAccum) >= 120) {
-                root.dispatch(wheelAccum > 0 ? "scroll_up" : "scroll_down");
-                wheelAccum -= wheelAccum > 0 ? 120 : -120;
+            wheelAccumY += wheel.angleDelta.y;
+            wheelAccumX += wheel.angleDelta.x;
+            while (Math.abs(wheelAccumY) >= 120) {
+                root.dispatch(wheelAccumY > 0 ? "scroll_up" : "scroll_down", wheel);
+                wheelAccumY -= wheelAccumY > 0 ? 120 : -120;
+            }
+            while (Math.abs(wheelAccumX) >= 120) {
+                root.dispatch(wheelAccumX > 0 ? "scroll_left" : "scroll_right", wheel);
+                wheelAccumX -= wheelAccumX > 0 ? 120 : -120;
             }
         }
     }

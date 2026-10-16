@@ -26,6 +26,9 @@ NCard {
     required property bool internal
 
     property bool compact: false
+    property bool paused: false
+    // noctalia: accessibility.ui_scale x notification.scale for toasts
+    readonly property real s: historyMode ? 1 : Math.max(0.1, Number(Config.get("notification.scale", 1)))
     property bool historyMode: false
     property bool expanded: false
     readonly property var actions: {
@@ -44,7 +47,14 @@ NCard {
 
     color: Theme.alpha(historyMode ? Theme.surfaceVariant : Theme.surface, historyMode ? 1 : Number(Config.get("notification.background_opacity", 0.97)))
     border.color: critical ? Theme.error : Theme.resolve(Config.get("notification.border_color", "outline"))
-    border.width: Config.get("notification.border", true) === false && !historyMode ? 0 : Math.max(1, Number(Config.get("notification.border_width", 1)))
+    border.width: {
+        if (historyMode)
+            return 1;
+        if (Config.get("notification.border", true) === false)
+            return 0;
+        var w = Math.max(0, Number(Config.get("notification.border_width", 1)));
+        return (critical ? Math.max(Style.emphasizedBorderWidth, w) : w) * s;
+    }
     implicitHeight: content.implicitHeight + Style.cardPadding * 2
     clip: true
 
@@ -57,7 +67,7 @@ NCard {
         id: tick
         interval: 50
         repeat: true
-        running: !root.historyMode && root.timeout > 0 && !root.hovered
+        running: !root.historyMode && root.timeout > 0 && !root.hovered && !root.paused
         onTriggered: {
             root.elapsed += interval;
             if (root.elapsed >= root.timeout) {
@@ -167,22 +177,24 @@ NCard {
                     NText {
                         visible: Config.get("notification.show_app_name", true) !== false && root.appName !== ""
                         text: root.appName
-                        size: Style.fontSizeMini
+                        size: Style.fontSizeMini * root.s
                         muted: true
                         width: Math.min(implicitWidth, parent.width - stamp.width - Style.spaceXs)
                     }
                     NText {
                         id: stamp
                         text: "· " + Util.relativeTime(root.time, root.nowTick)
-                        size: Style.fontSizeMini
+                        size: Style.fontSizeMini * root.s
                         muted: true
                     }
                 }
                 NText {
                     width: parent.width
                     text: root.summary
+                    size: Style.fontSizeTitle * root.s
                     weight: Font.Bold
                     wrapMode: Text.Wrap
+                    elide: Text.ElideRight
                     maximumLineCount: 2
                 }
                 Text {
@@ -192,9 +204,9 @@ NCard {
                     textFormat: Text.StyledText
                     wrapMode: Text.Wrap
                     elide: Text.ElideRight
-                    maximumLineCount: root.expanded ? 20 : (root.compact ? 2 : 4)
+                    maximumLineCount: root.expanded ? 20 : (root.compact ? 2 : 3)
                     font.family: Style.fontFamily
-                    font.pixelSize: Style.fontSizeCaption
+                    font.pixelSize: Style.fontSizeBody * root.s
                     color: Theme.fgSurfaceVariant
                     linkColor: Theme.primary
                     onLinkActivated: link => Qt.openUrlExternally(link)
@@ -230,15 +242,15 @@ NCard {
 
     // timeout progress
     Rectangle {
-        visible: !root.historyMode && root.timeout > 0
+        // noctalia: shown for timed toasts and for critical ones; colored by urgency
+        visible: !root.historyMode && (root.timeout > 0 || root.critical)
         anchors.bottom: parent.bottom
         anchors.left: parent.left
         anchors.bottomMargin: 1
         anchors.leftMargin: Style.radiusXl / 2
-        height: 2
-        radius: 1
-        width: Math.max(0, (parent.width - Style.radiusXl) * (1 - root.elapsed / Math.max(1, root.timeout)))
-        color: root.critical ? Theme.error : Theme.primary
-        opacity: 0.7
+        height: 3 * root.s
+        radius: height / 2
+        width: Math.max(0, (parent.width - Style.radiusXl) * (root.timeout > 0 ? 1 - root.elapsed / Math.max(1, root.timeout) : 1))
+        color: root.critical ? Theme.error : (root.urgency === "low" ? Theme.alpha(Theme.fgSurface, 0.9) : Theme.primary)
     }
 }

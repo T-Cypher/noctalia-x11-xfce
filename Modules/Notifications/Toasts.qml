@@ -28,14 +28,17 @@ PanelWindow {
     margins.left: left ? Number(Config.get("notification.offset_x", 20)) : 0
     margins.right: !left && !center ? Number(Config.get("notification.offset_x", 20)) : 0
 
+    // max_visible = 0: as many toasts as fit; the rest wait (expiry paused) below the fold.
+    readonly property real maxHeight: Math.max(100, screenRef.height - 2 * Number(Config.get("notification.offset_y", 8)))
     implicitWidth: cardWidth
-    implicitHeight: Math.max(1, column.implicitHeight)
+    implicitHeight: Math.max(1, Math.min(column.implicitHeight, maxHeight))
     exclusionMode: ExclusionMode.Normal
     exclusiveZone: 0
     aboveWindows: true
     focusable: false
     color: "transparent"
-    visible: Notifications.toasts.count > 0 && Config.screenAllowed(Config.get("notification.monitors", []), screenRef)
+    readonly property bool onThisScreen: Config.get("notification.follow_focused_output", false) === true ? Notifications.targetScreen === screenRef.name : Config.screenAllowed(Config.get("notification.monitors", []), screenRef)
+    visible: Notifications.toasts.count > 0 && onThisScreen
 
     Column {
         id: column
@@ -62,6 +65,7 @@ PanelWindow {
 
                 width: column.width
                 height: card.implicitHeight
+                readonly property bool fits: y + height <= win.maxHeight + 0.5
                 opacity: 0
                 property real slide: win.left ? -40 : 40
 
@@ -100,6 +104,8 @@ PanelWindow {
                     actionsJson: slot.actionsJson
                     glyph: slot.glyph
                     internal: slot.internal
+                    paused: !slot.fits
+                    visible: slot.fits
                     onExpired: Notifications.expire(slot.nid)
                 }
             }

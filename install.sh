@@ -22,10 +22,10 @@ mode=copy
 autostart=1
 for arg in "$@"; do
     case "$arg" in
-        --link) mode=link ;;
+        --link) mode="link" ;;
         --no-autostart) autostart=0 ;;
-        --uninstall) mode=uninstall ;;
-        -h|--help) sed -n '2,12p' "$0"; exit 0 ;;
+        --uninstall) mode="uninstall" ;;
+        -h|--help) sed -n '2,11p' "$0"; exit 0 ;;
         *) echo "unknown option: $arg" >&2; exit 2 ;;
     esac
 done
@@ -61,6 +61,7 @@ EOF
 optional=(
     "nmcli:network widget and Wi-Fi panel (NetworkManager)"
     "brightnessctl:backlight brightness"
+    "ddcutil:external monitor brightness over DDC/CI ([brightness] enable_ddcutil = true)"
     "xfconf-query:XFCE wallpaper / theme integration"
     "xdotool:auto-paste for clipboard & emoji pickers"
     "wpctl:PipeWire (volume widgets need a running PipeWire)"
@@ -76,13 +77,18 @@ done
 
 # ------------------------------------------------------------------ install files
 mkdir -p "$(dirname "$DEST")"
-if [ -L "$DEST" ] || [ -e "$DEST" ]; then
+src_real="$(realpath "$SRC")"
+dest_real="$(realpath -m "$DEST")"
+if [ "$src_real" = "$dest_real" ]; then
+    # Running from the installed location (e.g. the archive was extracted in place):
+    # never delete the source tree.
+    say "already installed in $DEST"
+elif [ "$mode" = link ]; then
     rm -rf "$DEST"
-fi
-if [ "$mode" = link ]; then
     ln -s "$SRC" "$DEST"
     say "linked $DEST -> $SRC"
 else
+    rm -rf "$DEST"
     mkdir -p "$DEST"
     (cd "$SRC" && tar --exclude=.git --exclude=.qmlls.ini -cf - .) | (cd "$DEST" && tar -xf -)
     say "installed into $DEST"
@@ -95,10 +101,13 @@ say "installed $BIN_DIR/noctalia-msg"
 case ":$PATH:" in *":$BIN_DIR:"*) ;; *) warn "$BIN_DIR is not in your PATH" ;; esac
 
 # ------------------------------------------------------------------ starter config
-if [ ! -e "$USER_CONFIG_DIR/config.toml" ]; then
-    if [ -e "$XDG_CONFIG_HOME/noctalia/config.toml" ]; then
-        say "found an existing noctalia config ($XDG_CONFIG_HOME/noctalia/config.toml); it will be used (read-only)"
-        say "create $USER_CONFIG_DIR/config.toml to give the X11 port its own settings"
+# Like noctalia, every *.toml in the config directory is loaded (and merged).
+has_toml() { compgen -G "$1/*.toml" >/dev/null 2>&1; }
+SHARED_CONFIG_DIR="${NOCTALIA_CONFIG_HOME:-$XDG_CONFIG_HOME}/noctalia"
+if ! has_toml "$USER_CONFIG_DIR"; then
+    if has_toml "$SHARED_CONFIG_DIR"; then
+        say "found an existing noctalia config in $SHARED_CONFIG_DIR; it will be used (read-only)"
+        say "add a *.toml file to $USER_CONFIG_DIR to give the X11 port its own settings"
     else
         mkdir -p "$USER_CONFIG_DIR"
         cp "$SRC/config.example.toml" "$USER_CONFIG_DIR/config.toml"

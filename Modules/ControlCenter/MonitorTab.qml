@@ -20,33 +20,56 @@ Item {
                 anchors.margins: Style.cardPadding
                 spacing: Style.spaceSm
                 SectionLabel {
-                    text: I18n.tr("bar.widgets.brightness.brightness", "Brightness") + (Brightness.device !== "" ? " · " + Brightness.device : "")
+                    text: I18n.tr("bar.widgets.brightness.brightness", "Brightness")
                     width: parent.width
                 }
-                Row {
-                    width: parent.width
-                    spacing: Style.spaceSm
-                    visible: Brightness.available
-                    NIcon {
-                        icon: "brightness-low"
-                        anchors.verticalCenter: parent.verticalCenter
-                    }
-                    NSlider {
-                        width: parent.width - Style.baseGlyphSize * 2 - pct.width - parent.spacing * 3
-                        value: Brightness.brightness
-                        anchors.verticalCenter: parent.verticalCenter
-                        onMoved: v => Brightness.setBrightness(v)
-                    }
-                    NIcon {
-                        icon: "brightness-high"
-                        anchors.verticalCenter: parent.verticalCenter
-                    }
-                    NText {
-                        id: pct
-                        text: Math.round(Brightness.brightness * 100) + "%"
-                        width: 44 * Style.uiScale
-                        horizontalAlignment: Text.AlignRight
-                        anchors.verticalCenter: parent.verticalCenter
+                Repeater {
+                    // index model: delegates survive level updates (a slider is never destroyed mid-drag)
+                    model: Brightness.displays.length
+                    delegate: Column {
+                        id: displayRow
+                        required property int index
+                        readonly property var modelData: Brightness.displays[index] || ({
+                                id: "",
+                                screen: "",
+                                label: "",
+                                brightness: 0,
+                                controllable: false
+                            })
+                        visible: modelData.controllable === true
+                        width: bCol.width
+                        spacing: Style.spaceXs
+                        NText {
+                            visible: Brightness.displays.filter(d => d.controllable).length > 1
+                            text: (displayRow.modelData.screen !== "" ? displayRow.modelData.screen + " · " : "") + displayRow.modelData.label
+                            size: Style.fontSizeCaption
+                            muted: true
+                        }
+                        Row {
+                            width: parent.width
+                            spacing: Style.spaceSm
+                            NIcon {
+                                icon: "brightness-low"
+                                anchors.verticalCenter: parent.verticalCenter
+                            }
+                            NSlider {
+                                width: parent.width - Style.baseGlyphSize * 2 - pct.width - parent.spacing * 3
+                                value: displayRow.modelData.brightness
+                                anchors.verticalCenter: parent.verticalCenter
+                                onMoved: v => Brightness.setBrightness(v, displayRow.modelData.id)
+                            }
+                            NIcon {
+                                icon: "brightness-high"
+                                anchors.verticalCenter: parent.verticalCenter
+                            }
+                            NText {
+                                id: pct
+                                text: Math.round(displayRow.modelData.brightness * 100) + "%"
+                                width: 44 * Style.uiScale
+                                horizontalAlignment: Text.AlignRight
+                                anchors.verticalCenter: parent.verticalCenter
+                            }
+                        }
                     }
                 }
                 NText {
@@ -55,7 +78,7 @@ Item {
                     wrapMode: Text.Wrap
                     muted: true
                     size: Style.fontSizeCaption
-                    text: "No writable backlight found. Install brightnessctl (and make sure your user may write /sys/class/backlight, e.g. via the video group or logind)."
+                    text: "No controllable display found. Install brightnessctl for laptop backlights, or ddcutil (with [brightness] enable_ddcutil = true) for external monitors."
                 }
             }
         }

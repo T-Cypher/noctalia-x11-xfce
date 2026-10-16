@@ -76,10 +76,13 @@ Singleton {
             applyScreen(screenName, p);
             changed(screenName, p);
         }
-        Hooks.run("wallpaper_changed", {
-            NOCTALIA_WALLPAPER: p,
-            NOCTALIA_MONITOR: screenName || "*"
-        });
+        // noctalia runs wallpaper_changed once per changed connector
+        var targets = (!screenName || screenName === "*" || screenName === "all") ? Quickshell.screens.map(sc => sc.name) : [screenName];
+        for (var t = 0; t < targets.length; t++)
+            Hooks.run("wallpaper_changed", {
+                NOCTALIA_WALLPAPER_PATH: p,
+                NOCTALIA_WALLPAPER_CONNECTOR: targets[t]
+            });
     }
 
     function pickRelative(screenName, delta) {
@@ -252,12 +255,6 @@ Singleton {
         source: Theme.source === "wallpaper" && root.primaryWallpaper !== "" ? "file://" + root.primaryWallpaper : ""
         depth: 3
         rescaleSize: 96
-        onColorsChanged: {
-            var p = Theme.paletteFromColors(colors, String(Config.get("theme.wallpaper_scheme", "m3-content")));
-            if (p) {
-                Theme.wallpaperPalette = p;
-                Hooks.run("colors_changed", {});
-            }
-        }
+        onColorsChanged: Theme.wallpaperColors = colors && colors.length > 0 ? colors : []
     }
 }

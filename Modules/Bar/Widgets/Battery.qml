@@ -14,10 +14,7 @@ BarWidget {
     readonly property string displayMode: settings.display_mode || "glyph"
 
     hideWidget: !Power.hasBattery || (settings.hide_when_plugged === true && Power.pluggedIn) || (settings.hide_when_full === true && Power.fullyCharged)
-    tooltipText: Power.stateText() + " · " + Power.percent + "%" + (Power.charging && Power.timeToFull > 0 ? "\n" + Util.formatDuration(Power.timeToFull) + " " + I18n.tr("power.battery.until-full", "until full") : (!Power.pluggedIn && Power.timeToEmpty > 0 ? "\n" + Util.formatDuration(Power.timeToEmpty) + " " + I18n.tr("power.battery.remaining", "remaining") : ""))
-    defaultActions: ({
-            left: "panel-toggle control-center power"
-        })
+    tooltipText: Power.stateText() + " · " + Power.percent + "%" + (Power.charging && Power.timeToFull > 0 ? "\n" + I18n.tr("power.battery.tooltip.time-to-full", "Time to Full") + ": " + Util.formatDuration(Power.timeToFull) : (!Power.pluggedIn && Power.timeToEmpty > 0 ? "\n" + I18n.tr("power.battery.tooltip.time-left", "Time Left") + ": " + Util.formatDuration(Power.timeToEmpty) : ""))
 
     Row {
         spacing: Style.spaceXs * root.contentScale

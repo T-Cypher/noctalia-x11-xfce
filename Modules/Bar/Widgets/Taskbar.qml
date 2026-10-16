@@ -20,14 +20,6 @@ BarWidget {
 
     hideWidget: windows.length === 0 && pinnedIdle.length === 0
     padding: Style.spaceXs * contentScale
-    defaultActions: ({
-            scroll_up: function () {
-                root.cycle(-1);
-            },
-            scroll_down: function () {
-                root.cycle(1);
-            }
-        })
 
     function cycle(delta) {
         if (windows.length === 0)

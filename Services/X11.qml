@@ -49,7 +49,7 @@ Singleton {
     }
 
     signal pointerReply(int x, int y, string tag)
-    signal keyboardUpdated(bool layoutChanged, bool locksChanged)
+    signal keyboardUpdated(bool layoutChanged, bool locksChanged, var previous)
     signal desktopSwitched(int index)
 
     function send(cmd) {
@@ -62,6 +62,21 @@ Singleton {
     }
     function relDesktop(delta) {
         send("desktop-rel " + (delta > 0 ? "+" + delta : String(delta)));
+    }
+    // workspace-switch: adjacent workspace, stopping at both ends (noctalia semantics).
+    function switchDesktopClamped(delta) {
+        var t = currentDesktop + (delta > 0 ? 1 : -1);
+        if (t >= 0 && t < desktopCount)
+            switchDesktop(t);
+    }
+    // taskbar-cycle without an invoking taskbar: windows of the current workspace in stacking order.
+    function cycleWindows(delta) {
+        var list = windowsOnDesktop(currentDesktop).filter(w => !w.skipTaskbar);
+        if (list.length === 0)
+            return;
+        var idx = list.findIndex(w => w.id === activeId);
+        var n = idx < 0 ? 0 : (idx + (delta > 0 ? 1 : -1) + list.length) % list.length;
+        activate(list[n].id);
     }
     function activate(id) {
         send("activate " + id);
@@ -101,6 +116,17 @@ Singleton {
     }
     function queryPointer(tag) {
         send("pointer " + (tag || ""));
+    }
+
+    // Layout label: [shell.keyboard_layout] custom_labels (or a widget's own custom_labels) keyed
+    // by layout name or code, else the full name (display = "full") or the upper-case code.
+    function layoutLabel(display, widgetLabels) {
+        var custom = Object.assign({}, Config.get("shell.keyboard_layout.custom_labels", {}), widgetLabels || {});
+        if (custom[layoutName] !== undefined && String(custom[layoutName]) !== "")
+            return String(custom[layoutName]);
+        if (custom[layoutCode] !== undefined && String(custom[layoutCode]) !== "")
+            return String(custom[layoutCode]);
+        return display === "full" ? layoutName : layoutCode.toUpperCase();
     }
 
     function desktopName(index) {
@@ -185,7 +211,7 @@ Singleton {
             var layoutChanged = old.group !== msg.group || JSON.stringify(old.layouts) !== JSON.stringify(msg.layouts);
             var locksChanged = old.caps !== msg.caps || old.num !== msg.num || old.scroll !== msg.scroll;
             if (available)
-                keyboardUpdated(layoutChanged, locksChanged);
+                keyboardUpdated(layoutChanged, locksChanged, old);
             break;
         case "idle":
             idleSeconds = msg.seconds;
@@ -198,6 +224,7 @@ Singleton {
             break;
         case "ready":
             idleSupported = msg.idleSupported === true;
+            restarts = 0;   // the restart budget only guards against crash loops
             break;
         case "error":
             console.warn("[x11-bridge]", msg.message);

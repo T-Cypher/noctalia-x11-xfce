@@ -13,6 +13,8 @@ Singleton {
 
     readonly property bool isXfce: String(Quickshell.env("XDG_CURRENT_DESKTOP") || "").toUpperCase().indexOf("XFCE") >= 0
     property bool hasXfceLogout: false
+    // Best effort on X11: set when the shell starts the locker, cleared by logind's LockedHint.
+    property bool locked: false
 
     readonly property var defaultActions: [
         { action: "lock", shortcut: "1" },
@@ -90,8 +92,47 @@ Singleton {
     }
 
     function lock() {
+        locked = true;
+        sawLockedHint = false;
+        lockPolls = 0;
         Hooks.run("session_locked", {});
         sh(lockCommand());
+        lockPoll.restart();
+    }
+
+    // session_unlocked: lockers like light-locker / xfce4-screensaver report the lock through
+    // logind's LockedHint; once it has been set and drops again the session is unlocked.
+    property bool sawLockedHint: false
+    property int lockPolls: 0
+    function onLockHint(v) {
+        lockPolls++;
+        if (v === "yes") {
+            sawLockedHint = true;
+        } else if (v === "no" && sawLockedHint) {
+            locked = false;
+            lockPoll.stop();
+            Hooks.run("session_unlocked", {});
+        } else if (!sawLockedHint && lockPolls >= 8) {
+            // this locker does not report LockedHint: stop tracking
+            locked = false;
+            lockPoll.stop();
+        }
+    }
+    Timer {
+        id: lockPoll
+        interval: 2000
+        repeat: true
+        onTriggered: {
+            if (!lockHintProc.running)
+                lockHintProc.running = true;
+        }
+    }
+    Process {
+        id: lockHintProc
+        command: ["sh", "-c", "[ -n \"$XDG_SESSION_ID\" ] && exec loginctl show-session \"$XDG_SESSION_ID\" -p LockedHint --value 2>/dev/null"]
+        stdout: StdioCollector {
+            onStreamFinished: root.onLockHint(text.trim())
+        }
     }
 
     function powerCommand(kind) {

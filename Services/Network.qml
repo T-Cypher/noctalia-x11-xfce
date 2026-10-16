@@ -30,21 +30,39 @@ Singleton {
 
     signal wifiToggled(bool enabled)
 
+    // noctalia's network_display glyphs
     function glyph() {
-        if (!available)
-            return "wifi-off";
         if (primaryType === "ethernet")
-            return "network";
+            return "ethernet";
+        if (!available || !wifiEnabled)
+            return primaryType === "" && !wifiHardware ? "ethernet-off" : "wifi-off";
         if (primaryType === "wifi") {
-            if (signal >= 67)
+            if (signal >= 80)
                 return "wifi";
-            if (signal >= 34)
+            if (signal >= 60)
+                return "wifi-3";
+            if (signal >= 35)
                 return "wifi-2";
-            if (signal > 0)
+            if (signal >= 15)
                 return "wifi-1";
             return "wifi-0";
         }
-        return wifiEnabled ? "wifi-0" : "wifi-off";
+        return "wifi-exclamation";
+    }
+
+    // network-toggle: disconnect the active network, or reconnect when nothing is connected.
+    property string lastDevice: ""
+    function toggleConnection() {
+        if (connected && primaryDevice !== "") {
+            lastDevice = primaryDevice;
+            disconnect();
+        } else if (lastDevice !== "") {
+            Quickshell.execDetached(["nmcli", "device", "connect", lastDevice]);
+            refreshTimer.restart();
+        } else {
+            Quickshell.execDetached(["sh", "-c", "d=$(nmcli -t -f DEVICE,TYPE,STATE device 2>/dev/null | awk -F: '($2==\"wifi\"||$2==\"ethernet\") && $3==\"disconnected\" {print $1; exit}'); [ -n \"$d\" ] && exec nmcli device connect \"$d\""]);
+            refreshTimer.restart();
+        }
     }
 
     function refresh() {
@@ -232,7 +250,7 @@ Singleton {
         onExited: (code, status) => {
             if (code !== 0) {
                 root.lastError = connectErr.text.trim() || ("nmcli exited with " + code);
-                Notifications.notifyInternal(I18n.tr("control-center.network.connect-failed", "Connection failed"), root.connectingSsid + ": " + root.lastError, "wifi-off");
+                Notifications.notifyInternal(I18n.tr("notifications.internal.network-connect-failed-title", "Could not connect to {ssid}", { ssid: root.connectingSsid }), root.lastError, "wifi-off");
             }
             root.connectingSsid = "";
             root.refresh();

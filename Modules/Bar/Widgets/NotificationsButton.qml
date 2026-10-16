@@ -9,11 +9,7 @@ BarWidget {
 
     readonly property int unread: Notifications.unread
     hideWidget: settings.hide_when_no_unread === true && unread === 0 && !Notifications.dnd
-    tooltipText: Notifications.dnd ? I18n.tr("notifications.dnd-on", "Do Not Disturb is on") : (unread > 0 ? unread + " " + I18n.tr("notifications.unread", "unread") : I18n.tr("control-center.tabs.notifications", "Notifications"))
-    defaultActions: ({
-            left: "panel-toggle control-center notifications",
-            right: "notification-dnd-toggle"
-        })
+    tooltipText: Notifications.dnd ? I18n.tr("osd.dnd.on", "DND On") : (unread > 0 ? unread + " " + I18n.tr("notifications.unread", "unread") : I18n.tr("control-center.tabs.notifications", "Notifications"))
 
     Item {
         width: root.glyphSize

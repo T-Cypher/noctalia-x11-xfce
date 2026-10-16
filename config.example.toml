@@ -1,10 +1,13 @@
 # Noctalia X11 - configuration
 #
-# Location: ~/.config/noctalia-x11/config.toml   (hot-reloaded on save)
-# Fallback: ~/.config/noctalia/config.toml       (a native noctalia v5 config is read as-is)
+# Like noctalia v5.3.0, every *.toml file in ~/.config/noctalia-x11/ is loaded (alphabetically)
+# and merged, [include] files = [...] pulls in more files or directories, and
+# ~/.local/state/noctalia-x11/settings.toml is merged last. Everything is hot-reloaded.
+# Without any file in ~/.config/noctalia-x11/, noctalia's own ~/.config/noctalia/ is read as-is.
 #
-# The schema is noctalia v5.3.0's (same tables and keys as its example.toml). Keys this port
-# does not implement are ignored. X11 / XFCE specific settings live in [x11] at the bottom.
+# The schema is noctalia v5.3.0's. The values below are noctalia's defaults; delete what you do
+# not change. Keys this port does not implement are ignored. X11 / XFCE specific settings live
+# in [x11] at the bottom.
 
 # ── Shell ─────────────────────────────────────────────────────────────────────
 
@@ -47,7 +50,7 @@ open_near_click_control_center = false
 [shell.launcher]
 layout              = "full"            # full | simple
 width               = 760
-search_position     = "top"             # top | bottom
+search_position     = "bottom"          # top | bottom
 default_view        = "recent"          # recent | pinned | all | categories
 categories          = true
 show_settings_button = true
@@ -91,16 +94,19 @@ directory = ""                          # empty = XDG Pictures directory
 enabled          = false
 interval_seconds = 1800
 order            = "random"             # random | alphabetical
-recursive        = true
+recursive        = false
 
 # ── Theme ─────────────────────────────────────────────────────────────────────
 
 [theme]
 mode    = "dark"                        # dark | light | auto (follows sunrise/sunset)
+shell_mode = "follow"                   # follow | dark | light | auto (the shell's own surfaces)
 source  = "builtin"                     # builtin | wallpaper
 builtin = "Noctalia"                    # Ayu | Catppuccin | Dracula | Eldritch | Gruvbox |
                                         # Kanagawa | Noctalia | Nord | Rosé Pine | Tokyo-Night
 pure_black_dark = false
+# wallpaper_scheme = "m3-content"       # m3-tonal-spot | m3-content | m3-fruit-salad | m3-rainbow |
+                                        # m3-monochrome | vibrant | faithful | soft | dysfunctional | muted
 
 # [backdrop]
 # enabled        = true                 # dim the screen behind open panels
@@ -120,24 +126,37 @@ border_color       = "outline"
 position           = "top_right"        # top_right | top_left | top_center | bottom_*
 offset_x           = 20
 offset_y           = 8
-default_timeout_ms = 5000
-# monitors         = ["HDMI-1"]         # xrandr output names; empty = all monitors
+max_visible        = 0                  # 0 = as many as fit on the screen
+history_retention_hours = 0             # 0 = keep history (up to 100 entries)
+# monitors         = ["HDMI-1"]         # output names or make/model words; empty = all monitors
+# Timeouts follow the sender: expire_timeout -1 = 6 s, 0 = until dismissed.
 
 # [notification.filter.spotify]
-# match        = "spotify"
+# match        = "spotify"              # app name (exact or substring), desktop entry or category
 # show_toast   = false
 # save_history = false
+# bypass_dnd   = false
+# override_duration = 3000
 
 # ── OSD ───────────────────────────────────────────────────────────────────────
 
 [osd]
 enabled       = true
-position      = "top_center"               # top_center | top_right | top_left | bottom_* | center_left | center_right
+position      = "top_center"            # top_center | top_right | top_left | bottom_* | center_left | center_right
+orientation   = "horizontal"            # horizontal | vertical (level OSDs; uses position_vertical)
+position_vertical = "top_center"
 hide_delay_ms = 1400
 
 [osd.kinds]
 volume = true
 brightness = true
+wifi = true
+bluetooth = true
+power_profile = true
+caffeine = true
+nightlight = true
+dnd = true
+media = true
 keyboard_layout = true
 lock_keys = true
 
@@ -163,26 +182,32 @@ hidden_tabs = []                        # e.g. ["monitor", "weather"]
 # type = "wifi"
 
 [weather]
-enabled         = false
+enabled         = true                  # needs a [location]
 refresh_minutes = 30
-unit            = "celsius"             # celsius | fahrenheit
+unit            = "metric"              # metric | imperial
 
 [location]
 auto_locate = false
 address     = ""                        # e.g. "Lisbon, PT"
 # latitude  = 38.72
 # longitude = -9.14
-# custom_schedule = true
+# custom_schedule = true                # use sunset / sunrise instead of coordinates
 # sunset  = "20:30"
 # sunrise = "07:30"
 
 [audio]
 enable_overdrive = false                # allow up to 150%
-volume_step      = 5
 
 [brightness]
 minimum_brightness = 0.0
-step = 5
+enable_ddcutil     = false              # external monitors over DDC/CI (needs ddcutil + i2c-dev)
+sync_all_monitors  = false
+# [brightness.monitor.laptop]
+# match = "eDP-1"
+# backlight_device = "intel_backlight"
+
+[battery]
+warning_threshold = 10                  # percent; 0 disables the low-battery warning
 
 [nightlight]
 enabled = false                         # redshift / gammastep / sct / xrandr backend
@@ -191,6 +216,9 @@ temperature_day   = 6500
 temperature_night = 4000
 
 # Idle behaviors use the X11 screensaver idle time (XScreenSaver extension).
+[idle]
+pre_action_fade_seconds = 2.0           # fade the screen before an action; 0 = run immediately
+
 [idle.behavior.lock]
 timeout = 600
 action  = "lock"                        # lock | screen_off | suspend | lock_and_suspend | command
@@ -201,16 +229,23 @@ timeout = 660
 action  = "screen_off"
 enabled = false
 
+[idle.behavior.lock-and-suspend]
+timeout = 900
+action  = "lock_and_suspend"
+enabled = false
+
 # ── Bar ───────────────────────────────────────────────────────────────────────
-# Every [bar.<name>] table spawns a bar on each monitor (X11 dock window with struts).
+# Every [bar.<name>] table spawns a bar on each monitor (X11 dock window with struts). Without
+# any [bar.*] table, one bar with these defaults is shown.
 
 [bar.main]
 position           = "top"              # top | bottom | left | right
 thickness          = 34
 background_opacity = 1.0
 radius             = 12
-margin_ends        = 180
-margin_edge        = 10
+concave_edge_corners = true             # concave corners where a docked bar meets the screen
+margin_ends        = 100                # inset from both ends (0 = full length)
+margin_edge        = 0                  # > 0 floats the bar away from the screen edge
 padding            = 14
 widget_spacing     = 6
 scale              = 1.0
@@ -219,6 +254,7 @@ font_weight        = 500
 hover_highlight    = true
 show_tooltip       = true
 auto_hide          = false
+smart_auto_hide    = false              # hide while the workspace has windows
 reserve_space      = true
 capsule            = false
 # capsule_fill     = "surface_variant"
@@ -230,19 +266,23 @@ end    = ["media", "tray", "notifications", "clipboard", "network", "bluetooth",
 
 # Other widgets: taskbar, active_window, sysmon, keyboard_layout, lock_keys, caffeine,
 # nightlight, power_profile, theme_mode, weather, screenshot, settings, spacer, text,
-# custom_button.
+# custom_button, and noctalia's ready-made instances: cpu, temp, ram, network_tx, network_rx,
+# output_volume, input_volume, date.
 
 # [bar.main.monitor.laptop]
-# match     = "eDP-1"
+# match     = "eDP-1"                   # connector name, or a word of the monitor's make/model
 # thickness = 30
 
-# [bar.main.dead_zone.actions]
+# [bar.main.actions]                    # gestures for every widget on this bar
+# scroll_up = "volume-up"
+
+# [bar.main.dead_zone.actions]          # empty bar space (default: right = control center)
 # middle = "exec xfce4-terminal"
 
 # ── Widgets ───────────────────────────────────────────────────────────────────
 
 # [widget.clock]
-# format = "{:%H:%M}"
+# format = "{:%H:%M}"                   # two lines: "{:%H:%M}\n{:%d/%m}"
 # tooltip_format = "{:%A, %B %d, %Y}"
 
 # [widget.workspaces]
@@ -258,7 +298,8 @@ end    = ["media", "tray", "notifications", "clipboard", "network", "bluetooth",
 # type    = "custom_button"
 # glyph   = "terminal"
 # tooltip = "Terminal"
-# command = "exo-open --launch TerminalEmulator"
+# [widget.terminal.actions]
+# left = "exec exo-open --launch TerminalEmulator"
 
 # [widget.media.actions]
 # right = "media toggle"
@@ -273,14 +314,21 @@ icon_size = 48
 magnification = true
 magnification_scale = 1.45
 auto_hide = false
+margin_edge = 0
+show_dots   = false
+show_instance_count = true
 pinned    = []                          # e.g. ["firefox", "org.xfce.Thunar", "xfce4-terminal"]
 
 # ── Hooks ─────────────────────────────────────────────────────────────────────
 
 [hooks]
 # started           = "notify-send 'Noctalia' 'Shell started'"
-# wallpaper_changed = "echo $NOCTALIA_WALLPAPER > /tmp/wall"
+# wallpaper_changed = "logger \"wallpaper $NOCTALIA_WALLPAPER_CONNECTOR: $NOCTALIA_WALLPAPER_PATH\""
 # theme_mode_changed = "notify-send 'Theme' \"$NOCTALIA_THEME_MODE\""
+# battery_percentage_changed = "logger \"battery $NOCTALIA_BATTERY_STATE $NOCTALIA_BATTERY_PERCENT%\""
+# Also: colors_changed, session_locked, session_unlocked, logging_out, rebooting, shutting_down,
+# wifi_enabled / wifi_disabled, bluetooth_enabled / bluetooth_disabled, battery_charging,
+# battery_discharging, battery_plugged, power_profile_changed.
 
 # ── X11 / XFCE ────────────────────────────────────────────────────────────────
 
@@ -297,3 +345,4 @@ icon_theme_light  = ""
 screenshot_region_command = ""          # empty = xfce4-screenshooter -r / flameshot gui / maim -s
 screenshot_full_command   = ""
 focus_method      = "bridge"            # bridge | qt  (how panels grab keyboard focus)
+paste_tool        = "xdotool"

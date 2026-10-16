@@ -71,6 +71,8 @@ BarWidget {
     highlighted: meta.panel !== "" && meta.panel !== undefined && Panels.activePanel === meta.panel && Panels.activeScreen !== null && bar !== null && Panels.activeScreen.name === bar.screenRef.name
     tooltipText: settings.tooltip !== undefined ? String(settings.tooltip) : (meta.tip || "")
 
+    // Port extras: custom_button `command` keys (noctalia binds them through [widget.<name>.actions]);
+    // the screenshot widget's right click stands in for noctalia's capture menu.
     defaultActions: {
         var a = {};
         if (kind === "custom_button") {
@@ -84,12 +86,7 @@ BarWidget {
                 a.scroll_up = "exec " + settings.scroll_up_command;
             if (settings.scroll_down_command)
                 a.scroll_down = "exec " + settings.scroll_down_command;
-            return a;
         }
-        if (meta.left)
-            a.left = meta.left;
-        if (meta.right)
-            a.right = meta.right;
         return a;
     }
 

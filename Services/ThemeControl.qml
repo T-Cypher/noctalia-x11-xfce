@@ -14,18 +14,37 @@ Singleton {
         ShellState.set("theme_mode", m);
     }
 
-    function setSource(source, builtinName) {
+    // color-scheme-set <source> <name>. Returns "" on success or an error message.
+    readonly property var wallpaperSchemes: ["m3-tonal-spot", "m3-content", "m3-fruit-salad", "m3-rainbow", "m3-monochrome", "vibrant", "faithful", "soft", "dysfunctional", "muted"]
+    function setSource(source, name) {
+        var n = String(name || "").trim();
         if (source === "wallpaper") {
+            if (n !== "" && wallpaperSchemes.indexOf(n) < 0)
+                return "error: unknown wallpaper scheme '" + n + "' (available: " + wallpaperSchemes.join(", ") + ")";
             ShellState.set("theme_source", "wallpaper");
-        } else {
-            ShellState.set("theme_source", "builtin");
-            if (builtinName && builtinName.length > 0)
-                ShellState.set("theme_builtin", builtinName);
+            if (n !== "")
+                ShellState.set("theme_wallpaper_scheme", n);
+            return "";
         }
+        if (source === "builtin") {
+            if (n === "")
+                return "error: color-scheme-set builtin requires <name>";
+            var match = Theme.paletteNames.find(function (p) {
+                return p.toLowerCase() === n.toLowerCase();
+            });
+            if (!match)
+                return "error: unknown builtin palette '" + n + "' (available: " + Theme.paletteNames.join(", ") + ")";
+            ShellState.set("theme_source", "builtin");
+            ShellState.set("theme_builtin", match);
+            return "";
+        }
+        if (source === "community" || source === "custom")
+            return "error: " + source + " palettes are not supported by noctalia-x11";
+        return "error: usage: color-scheme-set builtin <name> | wallpaper [scheme]";
     }
 
     function applyXsettings() {
-        var dark = Theme.isDark;
+        var dark = Theme.appIsDark;
         var gtk = String(Config.get(dark ? "x11.gtk_theme_dark" : "x11.gtk_theme_light", ""));
         var icons = String(Config.get(dark ? "x11.icon_theme_dark" : "x11.icon_theme_light", ""));
         if (gtk !== "")
@@ -37,7 +56,7 @@ Singleton {
     // Runtime overrides (theme-mode-toggle, color-scheme-set) persist in state, but editing the
     // [theme] table in config.toml resets them so config changes always take effect.
     function configSnapshot() {
-        return [Config.get("theme.mode", "dark"), Config.get("theme.source", "builtin"), Config.get("theme.builtin", "Noctalia")].join("|");
+        return [Config.get("theme.mode", "dark"), Config.get("theme.source", "builtin"), Config.get("theme.builtin", "Noctalia"), Config.get("theme.wallpaper_scheme", "m3-content")].join("|");
     }
     function checkConfigChange() {
         if (!ShellState.loaded || !Config.ready)
@@ -49,6 +68,7 @@ Singleton {
         ShellState.set("theme_mode", null);
         ShellState.set("theme_source", null);
         ShellState.set("theme_builtin", null);
+        ShellState.set("theme_wallpaper_scheme", null);
         ShellState.set("theme_config_snapshot", snap);
     }
     Connections {
@@ -65,7 +85,9 @@ Singleton {
     }
 
     property bool started: false
+    property string lastAppMode: ""
     Component.onCompleted: {
+        lastAppMode = Theme.appMode;
         startTimer.start();
         checkConfigChange();
     }
@@ -78,12 +100,17 @@ Singleton {
 
     Connections {
         target: Theme
-        function onModeChanged() {
-            if (!root.started)
+        // theme_mode_changed follows the app-facing [theme] mode (it ignores shell_mode).
+        function onAppModeChanged() {
+            var previous = root.lastAppMode;
+            root.lastAppMode = Theme.appMode;
+            if (!root.started || previous === Theme.appMode)
                 return;
             root.applyXsettings();
             Hooks.run("theme_mode_changed", {
-                NOCTALIA_THEME_MODE: Theme.mode
+                NOCTALIA_THEME_MODE: Theme.appMode,
+                NOCTALIA_THEME_MODE_PREVIOUS: previous,
+                NOCTALIA_THEME_MODE_CONFIGURED: Theme.requestedMode
             });
         }
         function onBasePaletteChanged() {

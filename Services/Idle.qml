@@ -26,9 +26,10 @@ Singleton {
             out.push({
                 name: name,
                 timeout: t,
-                action: String(e.action || "command"),
+                action: String(e.action || "command").trim(),
                 command: e.command || "",
-                resume_command: e.resume_command || ""
+                resume_command: e.resume_command || "",
+                lock_before_suspend: e.lock_before_suspend !== false
             });
         }
         out.sort((a, b) => a.timeout - b.timeout);
@@ -58,9 +59,47 @@ Singleton {
         }
     }
 
-    function evaluate(secs) {
-        if (!watching)
+    // [idle] pre_action_fade_seconds: fade a fullscreen overlay in before running an action;
+    // any activity during the fade cancels it.
+    readonly property real fadeSeconds: Math.max(0, Number(Config.get("idle.pre_action_fade_seconds", 2.0)))
+    property var fading: null
+    property real fadeProgress: 0
+    property real lastSecs: 0
+    NumberAnimation {
+        id: fadeAnim
+        target: root
+        property: "fadeProgress"
+        from: 0
+        to: 1
+        duration: Math.max(1, root.fadeSeconds * 1000)
+        onFinished: {
+            var b = root.fading;
+            root.fading = null;
+            root.fadeProgress = 0;
+            if (b)
+                root.runAction(b);
+        }
+    }
+    function cancelFade() {
+        if (fading === null)
             return;
+        fadeAnim.stop();
+        var f = Object.assign({}, fired);
+        delete f[fading.name];
+        fired = f;
+        fading = null;
+        fadeProgress = 0;
+    }
+
+    function evaluate(secs) {
+        var wentBack = secs < lastSecs;
+        lastSecs = secs;
+        if (!watching) {
+            cancelFade();
+            return;
+        }
+        if (fading !== null && (secs < 2 || wentBack))
+            cancelFade();
         if (secs < 2) {
             // activity: run resume commands for fired behaviors and reset
             for (var name in fired) {
@@ -76,11 +115,16 @@ Singleton {
         }
         for (var i = 0; i < behaviors.length; i++) {
             var be = behaviors[i];
-            if (secs >= be.timeout && !fired[be.name]) {
+            if (secs >= be.timeout && !fired[be.name] && fading === null) {
                 var f = Object.assign({}, fired);
                 f[be.name] = true;
                 fired = f;
-                runAction(be);
+                if (fadeSeconds > 0) {
+                    fading = be;
+                    fadeAnim.restart();
+                } else {
+                    runAction(be);
+                }
             }
         }
     }
@@ -94,7 +138,11 @@ Singleton {
             Quickshell.execDetached(["xset", "dpms", "force", "off"]);
             break;
         case "suspend":
-            Session.suspend();
+            // lock_before_suspend (default true): lock first so the session is protected on resume
+            if (b.lock_before_suspend !== false)
+                Session.lockAndSuspend();
+            else
+                Session.suspend();
             break;
         case "lock_and_suspend":
             Session.lockAndSuspend();

@@ -92,7 +92,7 @@ Item {
                 anchors.margins: Style.cardPadding
                 spacing: Style.spaceXs
                 SectionLabel {
-                    text: I18n.tr("power.devices", "Devices")
+                    text: I18n.tr("control-center.power.peripherals", "Connected Devices")
                 }
                 Repeater {
                     model: Power.otherDevices

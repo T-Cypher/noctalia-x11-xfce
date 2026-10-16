@@ -1,6 +1,8 @@
-// Default configuration for Noctalia-X11.
-// Keys and values mirror noctalia v5.3.0 example.toml (snake_case TOML keys) for every
-// setting this port understands. X11/XFCE specific settings live in the [x11] table.
+// Built-in defaults for Noctalia-X11.
+// Values mirror noctalia v5.3.0's C++ config structs (src/config/config_types.h /
+// config_types.cpp / widget_config.cpp), which are authoritative over the partly stale
+// example.toml. Only keys this port understands are listed. X11/XFCE specific settings
+// live in the port-only [x11] table.
 .pragma library
 
 var defaults = {
@@ -16,12 +18,13 @@ var defaults = {
         offline_mode: false,
         show_location: true,
         app_icon_colorize: false,
-        app_icon_color: "on_surface",
+        app_icon_color: "",
         clipboard_enabled: true,
         clipboard_history_max_entries: 100,
         clipboard_auto_paste: "auto",
         lang: "",
         avatar_path: "",
+        panel_anchor_bar: "",
         animation: {
             enabled: true,
             speed: 1.0
@@ -36,6 +39,10 @@ var defaults = {
             border_color: "outline",
             border_width: 1.0,
             shadow: true,
+            list_item_background: false,
+            wallpaper_show_names: true,
+            floating_layer: "overlay",
+            floating_offset: 8,
             launcher_placement: "floating",
             clipboard_placement: "floating",
             control_center_placement: "attached",
@@ -43,6 +50,9 @@ var defaults = {
             session_placement: "attached",
             launcher_position: "center",
             clipboard_position: "center",
+            control_center_position: "auto",
+            wallpaper_position: "auto",
+            session_position: "auto",
             open_near_click_control_center: false,
             open_near_click_launcher: false,
             open_near_click_clipboard: false,
@@ -52,18 +62,21 @@ var defaults = {
         launcher: {
             layout: "full",
             width: 760,
-            search_position: "top",
+            search_position: "bottom",
             default_view: "recent",
             categories: true,
             category_icons_only: false,
             show_settings_button: true,
             show_session_button: true,
             show_icons: true,
+            show_app_origin_indicator: true,
             compact: false,
             app_grid: false,
+            show_app_actions: false,
             track_usage: true,
             sort_by_usage: true,
             pinned: [],
+            fetch_exchange_rates: true,
             provider_prefix: "/",
             auto_paste: "auto",
             providers: {
@@ -74,11 +87,21 @@ var defaults = {
                 windows: { prefix: "win" }
             }
         },
+        keyboard_layout: {
+            custom_labels: {}
+        },
         mpris: {
             blacklist: []
         },
         session: {
-            actions: [],
+            // Seeded only when the key is absent (an explicit `actions = []` shows no buttons).
+            actions: [
+                { action: "lock", shortcut: "1" },
+                { action: "logout", shortcut: "2" },
+                { action: "lock_and_suspend", shortcut: "3" },
+                { action: "reboot", shortcut: "4" },
+                { action: "shutdown", variant: "destructive", shortcut: "5" }
+            ],
             grid: false,
             grid_columns: 3,
             show_shortcuts: true,
@@ -92,26 +115,28 @@ var defaults = {
         directory: "",
         directory_light: "",
         directory_dark: "",
-        "default": { path: "" },
         automation: {
             enabled: false,
             interval_seconds: 1800,
             order: "random",
-            recursive: true
+            recursive: false
         }
     },
     theme: {
         mode: "dark",
+        shell_mode: "follow",
         source: "builtin",
         builtin: "Noctalia",
+        community_palette: "Oxocarbon",
         wallpaper_scheme: "m3-content",
-        pure_black_dark: false
+        pure_black_dark: false,
+        sync_color_scheme: true
     },
     notification: {
         enable_daemon: true,
         show_app_name: true,
         show_actions: true,
-        keep_dismissed_in_history: true,
+        position: "top_right",
         layer: "top",
         scale: 1.0,
         width: 360,
@@ -119,14 +144,14 @@ var defaults = {
         border: true,
         border_color: "outline",
         border_width: 1,
-        monitors: [],
+        follow_focused_output: false,
         offset_x: 20,
         offset_y: 8,
-        position: "top_right",
-        default_timeout_ms: 5000,
-        critical_timeout_ms: 0,
-        max_visible: 5,
-        history_max_entries: 100
+        monitors: [],
+        collapse_on_dismiss: true,
+        keep_dismissed_in_history: true,
+        history_retention_hours: 0,
+        max_visible: 0
     },
     osd: {
         enabled: true,
@@ -139,6 +164,7 @@ var defaults = {
         border: true,
         border_color: "outline",
         border_width: 1,
+        follow_focused_output: false,
         offset_x: 20,
         offset_y: 8,
         monitors: [],
@@ -155,7 +181,9 @@ var defaults = {
             dnd: true,
             lock_keys: true,
             keyboard_layout: true,
-            privacy: true
+            media: true,
+            privacy: true,
+            keyboard_backlight: true
         }
     },
     lockscreen: {
@@ -164,7 +192,9 @@ var defaults = {
     system: {
         monitor: {
             enabled: true,
+            cpu_temp_sensor_path: "",
             cpu_poll_seconds: 2.0,
+            gpu_poll_seconds: 5.0,
             memory_poll_seconds: 2.0,
             network_poll_seconds: 3.0,
             disk_poll_seconds: 10.0
@@ -180,6 +210,7 @@ var defaults = {
         show_shortcut_labels: true,
         show_session_button: true,
         hidden_tabs: [],
+        // Seeded only when the key is absent.
         shortcuts: [
             { type: "wifi" },
             { type: "bluetooth" },
@@ -194,23 +225,29 @@ var defaults = {
         }
     },
     weather: {
-        enabled: false,
+        enabled: true,
+        effects: true,
         refresh_minutes: 30,
-        unit: "celsius",
-        effects: true
+        unit: "metric"
     },
     audio: {
         enable_overdrive: false,
-        enable_sounds: false,
+        enable_sounds: true,
         enable_volume_sounds: true,
         enable_notification_sounds: true,
+        enable_power_sounds: true,
+        enable_screenshot_sounds: true,
         sound_volume: 0.5,
-        volume_step: 5
+        sound_theme: "freedesktop"
     },
     brightness: {
         enable_ddcutil: false,
-        minimum_brightness: 0.0,
-        step: 5
+        sync_all_monitors: false,
+        ignore_mmids: [],
+        minimum_brightness: 0.0
+    },
+    battery: {
+        warning_threshold: 10
     },
     nightlight: {
         enabled: false,
@@ -222,63 +259,41 @@ var defaults = {
         auto_locate: false,
         address: "",
         custom_schedule: false,
-        sunset: "20:30",
-        sunrise: "07:30"
+        sunset: "",
+        sunrise: ""
     },
     idle: {
-        pre_action_fade_seconds: 0,
+        pre_action_fade_seconds: 2.0,
+        behavior_order: [],
+        // Seeded only when no [idle.behavior.*] table is configured (see Config.finalize).
         behavior: {
-            "lock": { timeout: 600, action: "lock", enabled: false },
-            "screen-off": { timeout: 660, action: "screen_off", enabled: false }
+            "lock": { enabled: false, timeout: 600, action: "lock", command: "", resume_command: "" },
+            "screen-off": { enabled: false, timeout: 660, action: "screen_off", command: "", resume_command: "" },
+            "lock-and-suspend": { enabled: false, timeout: 900, action: "lock_and_suspend", command: "", resume_command: "" }
         }
     },
-    bar: {
-        main: {
-            enabled: true,
-            position: "top",
-            thickness: 34,
-            background_opacity: 1.0,
-            border: "outline",
-            border_width: 0.0,
-            radius: 12,
-            margin_ends: 180,
-            margin_edge: 10,
-            margin_opposite_edge: 0,
-            padding: 14,
-            widget_spacing: 6,
-            hover_highlight: true,
-            show_tooltip: true,
-            scale: 1.0,
-            font_scale: 1.0,
-            font_weight: 500,
-            font_family: "",
-            shadow: true,
-            auto_hide: false,
-            auto_hide_delay_ms: 0,
-            reserve_space: true,
-            layer: "top",
-            capsule: false,
-            capsule_fill: "surface_variant",
-            capsule_thickness: 0.76,
-            capsule_opacity: 1.0,
-            capsule_border_width: 1.0,
-            start: ["launcher", "wallpaper", "workspaces"],
-            center: ["clock"],
-            end: ["media", "tray", "notifications", "clipboard", "network", "bluetooth", "volume", "brightness", "battery", "control-center", "session"]
-        }
-    },
+    // Only user-defined [bar.<name>] tables create bars; with none, a single bar named
+    // "default" uses barDefaults() (noctalia's BarConfig{}).
+    bar: {},
     dock: {
         enabled: false,
         position: "bottom",
+        layer: "top",
         icon_size: 48,
         main_axis_padding: 16,
         cross_axis_padding: 8,
         item_spacing: 6,
         background_opacity: 0.88,
+        border: "outline",
+        border_width: 0,
         radius: 16,
-        margin_edge: 8,
+        concave_edge_corners: true,
+        margin_edge: 0,
+        margin_ends: 0,
+        shadow: true,
         show_running: true,
         auto_hide: false,
+        smart_auto_hide: false,
         reserve_space: true,
         active_scale: 1.0,
         inactive_scale: 0.85,
@@ -324,11 +339,72 @@ var defaults = {
     }
 };
 
+// noctalia's BarConfig{} defaults (used for the implicit "default" bar and as the base of every
+// [bar.<name>] table, exactly like the C++ struct defaults).
+var barDefaultsTable = {
+    position: "top",
+    enabled: true,
+    auto_hide: false,
+    auto_hide_delay_ms: 0,
+    smart_auto_hide: false,
+    show_on_workspace_switch: true,
+    reserve_space: true,
+    layer: "top",
+    thickness: 34,
+    background_opacity: 1.0,
+    compositor_blur: true,
+    border: "outline",
+    border_width: 0.0,
+    radius: 12,
+    concave_edge_corners: true,
+    margin_ends: 100,
+    margin_edge: 0,
+    margin_opposite_edge: 0,
+    padding: 14,
+    widget_spacing: 6,
+    shadow: true,
+    contact_shadow: false,
+    panel_overlap: 1,
+    capsule_thickness: 0.76,
+    scale: 1.0,
+    font_scale: 1.0,
+    font_weight: 500,
+    font_family: "",
+    start: ["launcher", "wallpaper", "workspaces"],
+    center: ["clock"],
+    end: ["media", "tray", "notifications", "clipboard", "network", "bluetooth", "volume", "brightness", "battery", "control-center", "session"],
+    capsule: false,
+    capsule_fill: "surface_variant",
+    capsule_padding: 6,
+    capsule_opacity: 1.0,
+    capsule_border_width: 1.0,
+    hover_highlight: true,
+    show_tooltip: true
+};
+
+// Built-in named widget instances (noctalia's seedBuiltinWidgets). A user [widget.<name>]
+// overlays the seeded entry only when it omits `type` or keeps the same type.
+var seededWidgets = {
+    cpu: { type: "sysmon", stat: "cpu_usage" },
+    temp: { type: "sysmon", stat: "cpu_temp" },
+    ram: { type: "sysmon", stat: "ram_used" },
+    network_tx: { type: "sysmon", stat: "net_tx" },
+    network_rx: { type: "sysmon", stat: "net_rx" },
+    output_volume: { type: "volume", device: "output" },
+    input_volume: { type: "volume", device: "input" },
+    date: { type: "clock", format: "{:%a %d %b}" },
+    active_window: { type: "active_window", max_length: 260, min_length: 80, icon_size: 14, title_scroll: "none" },
+    media: { type: "media", max_length: 220, min_length: 80, art_size: 16, title_scroll: "none" },
+    keyboard_layout: { type: "keyboard_layout", hide_when_single_layout: false },
+    lock_keys: { type: "lock_keys", show_caps_lock: true, show_num_lock: true, show_scroll_lock: false, hide_when_off: false, display: "short" },
+    spacer: { type: "spacer", interactive: false }
+};
+
 function isPlainObject(v) {
     return v !== null && typeof v === "object" && !Array.isArray(v);
 }
 
-// Deep merge: arrays and scalars from `over` replace those in `base`.
+// Defaults merge: arrays and scalars from `over` replace those in `base`; tables merge.
 function merge(base, over) {
     if (!isPlainObject(base))
         return clone(over);
@@ -344,6 +420,48 @@ function merge(base, over) {
     return out;
 }
 
+// noctalia's ConfigService::deepMerge for user files: like merge(), except that any table named
+// "session" merges its `actions` array index by index when the action names match.
+function deepMergeUser(base, over) {
+    var out = isPlainObject(base) ? base : {};
+    if (!isPlainObject(over))
+        return out;
+    for (var k in over) {
+        var v = over[k];
+        if (isPlainObject(v) && isPlainObject(out[k])) {
+            if (k === "session" && Array.isArray(v.actions)) {
+                out[k].actions = mergeSessionActions(out[k].actions, v.actions);
+                var rest = {};
+                for (var rk in v)
+                    if (rk !== "actions")
+                        rest[rk] = v[rk];
+                deepMergeUser(out[k], rest);
+                continue;
+            }
+            deepMergeUser(out[k], v);
+            continue;
+        }
+        out[k] = clone(v);
+    }
+    return out;
+}
+
+function mergeSessionActions(baseActions, overlay) {
+    if (!Array.isArray(baseActions))
+        return clone(overlay);
+    var merged = [];
+    for (var i = 0; i < overlay.length; i++) {
+        var o = overlay[i];
+        var b = i < baseActions.length ? baseActions[i] : null;
+        if (!isPlainObject(o) || !isPlainObject(b) || b.action !== o.action) {
+            merged.push(clone(o));
+            continue;
+        }
+        merged.push(deepMergeUser(clone(b), o));
+    }
+    return merged;
+}
+
 function clone(v) {
     if (Array.isArray(v))
         return v.map(clone);
@@ -356,8 +474,6 @@ function clone(v) {
     return v;
 }
 
-// Bars inherit [bar.main] defaults for keys they omit (named bars are fully independent in
-// noctalia, but sharing the base defaults keeps partial bar tables usable).
 function barDefaults() {
-    return clone(defaults.bar.main);
+    return clone(barDefaultsTable);
 }
